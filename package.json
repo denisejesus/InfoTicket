@@ -1,0 +1,37 @@
+{
+  "name": "infoticket",
+  "private": true,
+  "version": "1.16.4",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "setup:db": "node scripts/setup-db.js",
+    "seed:templates": "node scripts/seed-templates.js",
+    "deploy:functions": "npx supabase functions deploy send-whatsapp-official --project-ref vrkhkifhkztttukuxbwz",
+    "deploy:all-functions": "npx supabase functions deploy send-notification --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy send-whatsapp-official --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy chatwoot-webhook --project-ref vrkhkifhkztttukuxbwz"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^16.4.7",
+    "lucide-react": "^0.475.0",
+    "pg": "^8.13.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/pg": "^8.11.11",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  }
+}
