@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Database Automation Script v1.12.0
+ * InfoTicket - Database Automation Script v1.18.1
  * Configuração Completa do Banco Multi-Tenant, Triggers de Notificação, Chat4u, Templates, SLA, CSAT e Organizações B2B2B
  */
 import fs from 'fs';
@@ -380,6 +380,14 @@ ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_url VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_api_access_token VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_account_id INT;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_inbox_id INT;
+
+-- 10.1 Servidor de E-mail Corporativo Multi-Tenant (Fase 18.1 - SMTP)
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_port INT;
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_password VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_email VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_name VARCHAR(255);
 
 -- 11. Tabela de Templates de Comunicação (communication_templates)
 CREATE TABLE IF NOT EXISTS public.communication_templates (

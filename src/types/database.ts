@@ -1,5 +1,5 @@
 /**
- * Modelos TypeScript do Banco de Dados InfoTicket v1.12.0
+ * Modelos TypeScript do Banco de Dados InfoTicket v1.18.1
  */
 
 export type UserRole = 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Operador/Funcionário' | 'Cliente';
@@ -75,6 +75,12 @@ export interface Company {
   chatwoot_api_access_token?: string;
   chatwoot_account_id?: number | null;
   chatwoot_inbox_id?: number | null;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_user?: string | null;
+  smtp_password?: string | null;
+  smtp_from_email?: string | null;
+  smtp_from_name?: string | null;
   criado_em?: string;
   atualizado_em?: string;
 }

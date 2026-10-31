@@ -1,11 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.12.0
- * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail oficial (Resend / SendGrid)
+ * InfoTicket - Send Notification Edge Function v1.18.1
+ * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
+ * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
+ * Suporte a envio oficial direto via SMTP (Host, Porta, Usuário, Senha, From Email, From Name)
  * Isolação multi-tenant via company_id com variáveis dinâmicas ({{nome_cliente}}, {{ticket_id}}, etc.)
- * Tratamento de erros e auditoria de produção com registro em audit_logs
+ * Tratamento de erros e auditoria de produção com registro de falhas e sucessos em `audit_logs`
  */
 
 const corsHeaders = {
@@ -356,78 +359,153 @@ serve(async (req: Request) => {
     console.log(`📌 [Email] Assunto: ${finalAssunto}`);
 
     // -------------------------------------------------------------
-    // DISPARO VIA PROVEDOR OFICIAL DE E-MAIL (Resend ou SendGrid)
+    // DISPARO DE E-MAIL MULTI-TENANT (Fase 18.1 - SMTP Corporativo)
     // -------------------------------------------------------------
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-    const emailSender = Deno.env.get("EMAIL_FROM") || "InfoTicket <notificacoes@infocast-web.com.br>";
-
     let providerStatus = "mocked";
     let providerErrorDetails: string | null = null;
 
-    if (resendApiKey) {
+    // Busca credenciais SMTP da empresa ativa
+    let companySmtp: {
+      smtp_host?: string | null;
+      smtp_port?: number | null;
+      smtp_user?: string | null;
+      smtp_password?: string | null;
+      smtp_from_email?: string | null;
+      smtp_from_name?: string | null;
+    } | null = null;
+
+    if (currentCompanyId) {
+      const { data: comp } = await supabase
+        .from("companies")
+        .select("smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name")
+        .eq("id", currentCompanyId)
+        .maybeSingle();
+
+      if (comp) {
+        companySmtp = comp;
+      }
+    }
+
+    const hasTenantSmtp = Boolean(
+      companySmtp?.smtp_host &&
+      companySmtp?.smtp_port &&
+      companySmtp?.smtp_user &&
+      companySmtp?.smtp_password
+    );
+
+    if (hasTenantSmtp) {
+      // 1. PRIORIDADE: Disparo via Servidor SMTP Corporativo da Empresa (Multi-Tenant)
+      const portNum = Number(companySmtp!.smtp_port);
+      const isSecurePort = portNum === 465;
+      const fromAddr = companySmtp!.smtp_from_email?.trim() || companySmtp!.smtp_user!.trim();
+      const fromName = companySmtp!.smtp_from_name?.trim() || companyName;
+
+      console.log(`📡 [Send Notification v1.18.1] Enviando via SMTP Corporativo do Tenant (${companySmtp!.smtp_host}:${portNum})`);
+
       try {
-        const resendRes = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${resendApiKey}`,
-            "Content-Type": "application/json",
+        const transporter = nodemailer.createTransport({
+          host: companySmtp!.smtp_host!.trim(),
+          port: portNum,
+          secure: isSecurePort,
+          auth: {
+            user: companySmtp!.smtp_user!.trim(),
+            pass: companySmtp!.smtp_password!.trim(),
           },
-          body: JSON.stringify({
-            from: emailSender,
-            to: recipientEmails,
-            subject: finalAssunto,
-            text: finalCorpo,
-          }),
+          tls: {
+            rejectUnauthorized: false,
+          },
+          connectionTimeout: 12000,
+          greetingTimeout: 12000,
+          socketTimeout: 18000,
         });
 
-        if (resendRes.ok) {
-          providerStatus = "sent_via_resend";
-          console.log("✅ E-mail oficial enviado via Resend para:", recipientEmails);
-        } else {
-          const errText = await resendRes.text();
-          providerStatus = "resend_error";
-          providerErrorDetails = `HTTP ${resendRes.status}: ${errText}`;
-          console.error("❌ Falha na API do Resend:", providerErrorDetails);
-        }
-      } catch (err: any) {
-        providerStatus = "resend_exception";
-        providerErrorDetails = err.message;
-        console.error("❌ Exceção ao conectar no Resend:", err.message);
-      }
-    } else if (sendgridApiKey) {
-      try {
-        const sendgridRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${sendgridApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            personalizations: [{ to: recipientEmails.map((email) => ({ email })) }],
-            from: { email: emailSender.match(/<([^>]+)>/)?.[1] || emailSender, name: "InfoTicket" },
-            subject: finalAssunto,
-            content: [{ type: "text/plain", value: finalCorpo }],
-          }),
+        // Envia para todos os destinatários elegíveis
+        const info = await transporter.sendMail({
+          from: `"${fromName}" <${fromAddr}>`,
+          to: recipientEmails.join(", "),
+          subject: finalAssunto,
+          text: finalCorpo,
         });
 
-        if (sendgridRes.ok || sendgridRes.status === 202) {
-          providerStatus = "sent_via_sendgrid";
-          console.log("✅ E-mail oficial enviado via SendGrid para:", recipientEmails);
-        } else {
-          const errText = await sendgridRes.text();
-          providerStatus = "sendgrid_error";
-          providerErrorDetails = `HTTP ${sendgridRes.status}: ${errText}`;
-          console.error("❌ Falha na API do SendGrid:", providerErrorDetails);
-        }
-      } catch (err: any) {
-        providerStatus = "sendgrid_exception";
-        providerErrorDetails = err.message;
-        console.error("❌ Exceção ao conectar no SendGrid:", err.message);
+        providerStatus = "sent_via_tenant_smtp";
+        console.log(`✅ [SMTP Tenant] E-mail corporativo enviado com sucesso! MessageID: ${info.messageId}`);
+      } catch (smtpErr: any) {
+        providerStatus = "tenant_smtp_error";
+        providerErrorDetails = smtpErr.message;
+        console.error("❌ [SMTP Tenant] Falha ao despachar e-mail corporativo:", smtpErr.message);
       }
+
     } else {
-      console.warn("⚠️ Nenhuma chave de provedor de e-mail (RESEND_API_KEY ou SENDGRID_API_KEY) configurada no ambiente.");
-      providerStatus = "no_provider_configured";
+      // 2. FALLBACK: Se o Tenant ainda não configurou SMTP próprio, verifica chaves globais
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
+      const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
+      const emailSender = Deno.env.get("EMAIL_FROM") || "InfoTicket <notificacoes@infocast-web.com.br>";
+
+      if (resendApiKey) {
+        try {
+          const resendRes = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${resendApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: emailSender,
+              to: recipientEmails,
+              subject: finalAssunto,
+              text: finalCorpo,
+            }),
+          });
+
+          if (resendRes.ok) {
+            providerStatus = "sent_via_resend";
+            console.log("✅ E-mail enviado via Resend para:", recipientEmails);
+          } else {
+            const errText = await resendRes.text();
+            providerStatus = "resend_error";
+            providerErrorDetails = `HTTP ${resendRes.status}: ${errText}`;
+            console.error("❌ Falha na API do Resend:", providerErrorDetails);
+          }
+        } catch (err: any) {
+          providerStatus = "resend_exception";
+          providerErrorDetails = err.message;
+          console.error("❌ Exceção ao conectar no Resend:", err.message);
+        }
+      } else if (sendgridApiKey) {
+        try {
+          const sendgridRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${sendgridApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              personalizations: [{ to: recipientEmails.map((email) => ({ email })) }],
+              from: { email: emailSender.match(/<([^>]+)>/)?.[1] || emailSender, name: companyName },
+              subject: finalAssunto,
+              content: [{ type: "text/plain", value: finalCorpo }],
+            }),
+          });
+
+          if (sendgridRes.ok || sendgridRes.status === 202) {
+            providerStatus = "sent_via_sendgrid";
+            console.log("✅ E-mail enviado via SendGrid para:", recipientEmails);
+          } else {
+            const errText = await sendgridRes.text();
+            providerStatus = "sendgrid_error";
+            providerErrorDetails = `HTTP ${sendgridRes.status}: ${errText}`;
+            console.error("❌ Falha na API do SendGrid:", providerErrorDetails);
+          }
+        } catch (err: any) {
+          providerStatus = "sendgrid_exception";
+          providerErrorDetails = err.message;
+          console.error("❌ Exceção ao conectar no SendGrid:", err.message);
+        }
+      } else {
+        console.warn("⚠️ Empresa não configurou SMTP próprio e não há chaves globais configuradas.");
+        providerStatus = "no_smtp_configured";
+        providerErrorDetails = "Servidor SMTP corporativo não configurado na empresa.";
+      }
     }
 
     // -------------------------------------------------------------

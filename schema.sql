@@ -1,5 +1,5 @@
 -- =========================================================================
--- InfoTicket - Multi-tenant Database Schema v1.12.0
+-- InfoTicket - Multi-tenant Database Schema v1.18.1
 -- Tabelas: companies, client_organizations, profiles, tickets, ticket_messages, macros, audit_logs, communication_templates + Triggers
 -- =========================================================================
 
@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS public.companies (
     cnpj VARCHAR(20) UNIQUE,
     status VARCHAR(50) NOT NULL DEFAULT 'Ativo',
     trial_ends_at TIMESTAMPTZ,
+    smtp_host VARCHAR(255),
+    smtp_port INT,
+    smtp_user VARCHAR(255),
+    smtp_password VARCHAR(255),
+    smtp_from_email VARCHAR(255),
+    smtp_from_name VARCHAR(255),
     criado_em TIMESTAMPTZ DEFAULT NOW(),
     atualizado_em TIMESTAMPTZ DEFAULT NOW()
 );
@@ -518,6 +524,14 @@ ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_url VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_api_access_token VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_account_id INT;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_inbox_id INT;
+
+-- 11. Servidor de E-mail Corporativo Multi-Tenant (Fase 18.1 - SMTP)
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_port INT;
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_password VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_email VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_name VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS public.communication_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

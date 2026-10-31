@@ -1,6 +1,6 @@
 /**
- * InfoTicket - Configurações da Empresa v1.11.1
- * Integração Omnichannel Chat4u / Chatwoot & Gestão de Templates de Comunicação
+ * InfoTicket - Configurações da Empresa v1.18.1
+ * Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
  * Interface Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
 import React, { useEffect, useState } from 'react';
@@ -27,7 +27,9 @@ import {
   Lock,
   Crown,
   Trash2,
-  Plus
+  Plus,
+  Server,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
@@ -41,7 +43,19 @@ export const SettingsPage: React.FC = () => {
   // Regra de Negócio Crítica: Apenas Super Admin (Master) pode editar e testar os dados do Chat4u
   const isSuperAdmin = profile?.role === 'Super Admin';
 
-  const [activeTab, setActiveTab] = useState<'integracoes' | 'templates'>('integracoes');
+  const [activeTab, setActiveTab] = useState<'smtp' | 'integracoes' | 'templates'>('smtp');
+
+  // Estado do Servidor SMTP Corporativo Multi-Tenant (Fase 18.1)
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState<string>('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpFromEmail, setSmtpFromEmail] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('');
+  const [testRecipientEmail, setTestRecipientEmail] = useState('');
+  const [savingSmtp, setSavingSmtp] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [smtpFeedback, setSmtpFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Estado da Integração Chat4u / Chatwoot
   const [chatwootUrl, setChatwootUrl] = useState('');
@@ -75,6 +89,14 @@ export const SettingsPage: React.FC = () => {
   // Inicializa dados com base na empresa ativa da sessão
   useEffect(() => {
     if (company) {
+      setSmtpHost(company.smtp_host || '');
+      setSmtpPort(company.smtp_port ? String(company.smtp_port) : '587');
+      setSmtpUser(company.smtp_user || '');
+      setSmtpPassword(company.smtp_password || '');
+      setSmtpFromEmail(company.smtp_from_email || '');
+      setSmtpFromName(company.smtp_from_name || company.razao_social || '');
+      setTestRecipientEmail(profile?.email || '');
+
       setChatwootUrl(company.chatwoot_url || '');
       setChatwootToken(company.chatwoot_api_access_token || '');
       setChatwootAccountId(company.chatwoot_account_id ? String(company.chatwoot_account_id) : '');
@@ -82,7 +104,7 @@ export const SettingsPage: React.FC = () => {
       loadTemplates();
       loadChannels();
     }
-  }, [company?.id]);
+  }, [company?.id, profile?.email]);
 
   const loadChannels = async () => {
     if (!company?.id) return;
@@ -169,6 +191,84 @@ export const SettingsPage: React.FC = () => {
     setTemplateAssunto(tmpl.assunto);
     setTemplateCorpo(tmpl.corpo_mensagem);
     setTemplateFeedback(null);
+  };
+
+  // 0. Salvar Configurações SMTP da Empresa (Fase 18.1 - Gestor / Super Admin)
+  const handleSaveSmtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!company?.id) return;
+
+    setSavingSmtp(true);
+    setSmtpFeedback(null);
+
+    try {
+      await dataService.updateCompanySmtpSettings(company.id, {
+        smtp_host: smtpHost,
+        smtp_port: smtpPort ? parseInt(smtpPort, 10) : null,
+        smtp_user: smtpUser,
+        smtp_password: smtpPassword,
+        smtp_from_email: smtpFromEmail,
+        smtp_from_name: smtpFromName,
+      });
+
+      setSmtpFeedback({
+        type: 'success',
+        message: 'Configurações do Servidor SMTP salvas com sucesso para a empresa!',
+      });
+    } catch (err: any) {
+      console.error('Erro ao salvar SMTP:', err);
+      setSmtpFeedback({
+        type: 'error',
+        message: err.message || 'Falha ao salvar configurações SMTP no banco.',
+      });
+    } finally {
+      setSavingSmtp(false);
+    }
+  };
+
+  // 0.1 Testar Conexão SMTP via Edge Function
+  const handleTestSmtp = async () => {
+    if (!smtpHost.trim() || !smtpPort.trim() || !smtpUser.trim() || !smtpPassword.trim()) {
+      setSmtpFeedback({
+        type: 'error',
+        message: 'Por favor, informe Host, Porta, Usuário e Senha para testar o servidor SMTP.',
+      });
+      return;
+    }
+
+    setTestingSmtp(true);
+    setSmtpFeedback(null);
+
+    try {
+      const testResult = await dataService.testSmtpConnection({
+        smtp_host: smtpHost,
+        smtp_port: parseInt(smtpPort, 10),
+        smtp_user: smtpUser,
+        smtp_password: smtpPassword,
+        smtp_from_email: smtpFromEmail || smtpUser,
+        smtp_from_name: smtpFromName || company?.razao_social || 'InfoTicket',
+        recipient_test_email: testRecipientEmail || smtpUser,
+      });
+
+      if (testResult.success) {
+        setSmtpFeedback({
+          type: 'success',
+          message: testResult.message,
+        });
+      } else {
+        setSmtpFeedback({
+          type: 'error',
+          message: testResult.message,
+        });
+      }
+    } catch (err: any) {
+      setSmtpFeedback({
+        type: 'error',
+        message: err.message || 'Erro ao conectar na Edge Function de validação SMTP.',
+      });
+    } finally {
+      setTestingSmtp(false);
+    }
   };
 
   // 1. Salvar configurações do Chat4u no banco
@@ -360,6 +460,18 @@ export const SettingsPage: React.FC = () => {
       {/* Navegação por Abas em Tema Claro */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
+          onClick={() => setActiveTab('smtp')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            activeTab === 'smtp'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Server className="w-4 h-4 text-blue-600" />
+          <span>Servidor de E-mail (SMTP)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('integracoes')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'integracoes'
@@ -383,6 +495,235 @@ export const SettingsPage: React.FC = () => {
           <span>Templates de E-mail & WhatsApp</span>
         </button>
       </div>
+
+      {/* ABA 0: SERVIDOR DE E-MAIL (SMTP MULTI-TENANT) */}
+      {activeTab === 'smtp' && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-6">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-700 rounded-lg">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Servidor de E-mail Corporativo (SMTP)</h2>
+                  <p className="text-xs text-slate-500">
+                    Configure as credenciais do seu provedor de e-mail (ex: Google Workspace, Microsoft 365, cPanel, Locaweb) para que os clientes recebam mensagens com o remetente oficial da sua empresa.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-blue-50 text-blue-700 rounded-md border border-blue-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              Remetente Próprio por Empresa
+            </span>
+          </div>
+
+          {smtpFeedback && (
+            <div
+              className={`p-4 rounded-xl flex items-start gap-2.5 text-xs font-medium border ${
+                smtpFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {smtpFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <span>{smtpFeedback.message}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveSmtp} className="space-y-4 max-w-3xl">
+            {/* Linha 1: Host e Porta */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="sm:col-span-8">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Servidor SMTP (Host) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Server className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    required
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="ex: smtp.gmail.com, mail.suaempresa.com.br, smtp.office365.com"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Endereço ou IP do servidor de envio de correio eletrônico
+                </p>
+              </div>
+
+              <div className="sm:col-span-4">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Porta SMTP <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Hash className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="number"
+                    required
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    placeholder="587 ou 465"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  587 (TLS / STARTTLS) ou 465 (SSL seguro)
+                </p>
+              </div>
+            </div>
+
+            {/* Linha 2: Usuário e Senha */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Usuário / E-mail de Autenticação <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    required
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="notificacoes@suaempresa.com.br"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Conta com autorização para disparos
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Senha / Senha de Aplicativo <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    value={smtpPassword}
+                    onChange={(e) => setSmtpPassword(e.target.value)}
+                    placeholder="Senha de acesso ao SMTP ou App Password"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Para Gmail ou Outlook com 2FA, utilize a Senha de App gerada
+                </p>
+              </div>
+            </div>
+
+            {/* Linha 3: From Email e From Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  E-mail do Remetente (From Email)
+                </label>
+                <div className="relative">
+                  <Send className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    value={smtpFromEmail}
+                    onChange={(e) => setSmtpFromEmail(e.target.value)}
+                    placeholder="suporte@suaempresa.com.br"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Se omitido, o usuário de autenticação será utilizado
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Nome de Exibição (From Name)
+                </label>
+                <div className="relative">
+                  <FileText className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={smtpFromName}
+                    onChange={(e) => setSmtpFromName(e.target.value)}
+                    placeholder="Ex: Suporte - Nome da Empresa"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Nome que aparecerá na caixa de entrada do cliente
+                </p>
+              </div>
+            </div>
+
+            {/* Caixa de Teste de Disparo */}
+            <div className="p-4 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2 mt-4">
+              <label className="block text-xs font-bold text-slate-700">
+                E-mail para Receber Teste de Conexão:
+              </label>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <input
+                  type="email"
+                  value={testRecipientEmail}
+                  onChange={(e) => setTestRecipientEmail(e.target.value)}
+                  placeholder="seu-email@empresa.com.br"
+                  className="w-full sm:flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestSmtp}
+                  disabled={testingSmtp || savingSmtp}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg text-xs font-bold transition-all disabled:opacity-50 shrink-0"
+                >
+                  {testingSmtp ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Validando Conexão SMTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Testar Conexão SMTP</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                A Edge Function validará o handshake e enviará uma mensagem de teste para o e-mail acima.
+              </p>
+            </div>
+
+            {/* Botão Salvar Configurações */}
+            <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+              <button
+                type="submit"
+                disabled={savingSmtp || testingSmtp}
+                className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm shadow-blue-600/20 transition-all disabled:opacity-50"
+              >
+                {savingSmtp ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Salvar Configurações SMTP</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* ABA 1: INTEGRAÇÃO CHAT4U / CHATWOOT */}
       {activeTab === 'integracoes' && (

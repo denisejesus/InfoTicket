@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
 
 /**
- * Serviço de dados do InfoTicket v1.17.0
+ * Serviço de dados do InfoTicket v1.18.1
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -879,6 +879,106 @@ export const dataService = {
       throw error;
     }
     return data;
+  },
+
+  /**
+   * Atualiza as configurações de Servidor SMTP Corporativo da Empresa (Fase 18.1 - Multi-Tenant)
+   */
+  async updateCompanySmtpSettings(
+    companyId: string,
+    settings: {
+      smtp_host?: string | null;
+      smtp_port?: number | null;
+      smtp_user?: string | null;
+      smtp_password?: string | null;
+      smtp_from_email?: string | null;
+      smtp_from_name?: string | null;
+    }
+  ): Promise<Company | null> {
+    const { data, error } = await supabase
+      .from('companies')
+      .update({
+        smtp_host: settings.smtp_host?.trim() || null,
+        smtp_port: settings.smtp_port || null,
+        smtp_user: settings.smtp_user?.trim() || null,
+        smtp_password: settings.smtp_password?.trim() || null,
+        smtp_from_email: settings.smtp_from_email?.trim() || null,
+        smtp_from_name: settings.smtp_from_name?.trim() || null,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao salvar configurações SMTP:', error.message);
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * Testa a conectividade com o Servidor SMTP corporativo da Empresa via Edge Function
+   */
+  async testSmtpConnection(params: {
+    smtp_host: string;
+    smtp_port: number;
+    smtp_user: string;
+    smtp_password: string;
+    smtp_from_email?: string;
+    smtp_from_name?: string;
+    recipient_test_email?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const result = await supabase.functions.invoke('test-smtp-connection', {
+        body: {
+          smtp_host: params.smtp_host.trim(),
+          smtp_port: Number(params.smtp_port),
+          smtp_user: params.smtp_user.trim(),
+          smtp_password: params.smtp_password.trim(),
+          smtp_from_email: params.smtp_from_email?.trim() || params.smtp_user.trim(),
+          smtp_from_name: params.smtp_from_name?.trim() || 'InfoTicket Teste',
+          recipient_test_email: params.recipient_test_email?.trim() || params.smtp_user.trim(),
+        },
+      });
+
+      const { data, error } = result;
+
+      if (error) {
+        console.warn('⚠️ Falha ao invocar test-smtp-connection via SDK, tentando fetch direto:', error);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/test-smtp-connection`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': anonKey,
+            'Authorization': `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify(params),
+        });
+
+        if (res.ok) {
+          return await res.json();
+        }
+
+        return {
+          success: false,
+          message: error.message || 'Falha ao contatar a Edge Function de teste SMTP.',
+        };
+      }
+
+      return data || {
+        success: false,
+        message: 'Resposta vazia da Edge Function de teste SMTP.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Erro ao conectar com a Edge Function test-smtp-connection.',
+      };
+    }
   },
 
   /**

@@ -1,7 +1,7 @@
 {
   "name": "infoticket",
   "private": true,
-  "version": "1.17.0",
+  "version": "1.18.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "setup:db": "node scripts/setup-db.js",
     "seed:templates": "node scripts/seed-templates.js",
     "deploy:functions": "npx supabase functions deploy send-whatsapp-official --project-ref vrkhkifhkztttukuxbwz",
-    "deploy:all-functions": "npx supabase functions deploy send-notification --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy send-whatsapp-official --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy chatwoot-webhook --project-ref vrkhkifhkztttukuxbwz"
+    "deploy:all-functions": "npx supabase functions deploy send-notification --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy test-smtp-connection --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy send-whatsapp-official --project-ref vrkhkifhkztttukuxbwz && npx supabase functions deploy chatwoot-webhook --project-ref vrkhkifhkztttukuxbwz"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
