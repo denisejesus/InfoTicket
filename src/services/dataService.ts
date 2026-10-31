@@ -2,13 +2,14 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
 
 /**
- * Serviço de dados do InfoTicket v1.16.0
+ * Serviço de dados do InfoTicket v1.17.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
   /**
    * Cria um novo perfil na tabela profiles (RBAC / Gestão de Equipe e Clientes)
    * Deixa que o Supabase/PostgreSQL gere automaticamente o UUID se não for informado
+   * e dispara a notificação de boas-vindas por e-mail com as credenciais.
    */
   async createProfile(profileData: {
     company_id: string;
@@ -45,6 +46,22 @@ export const dataService = {
       console.error('Erro ao criar perfil:', error.message);
       throw error;
     }
+
+    // Dispara a Edge Function de boas-vindas para o novo usuário
+    try {
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          event_type: 'welcome_email',
+          company_id: profileData.company_id,
+          user_id: data.id,
+          recipient_email: profileData.email,
+          recipient_name: profileData.nome,
+        },
+      });
+    } catch (notifyErr) {
+      console.warn('Aviso: Falha ao enviar notificação de boas-vindas para novo perfil:', notifyErr);
+    }
+
     return data;
   },
 

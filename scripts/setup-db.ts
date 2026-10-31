@@ -557,7 +557,52 @@ CREATE TRIGGER trg_ticket_messages_new_interaction
 AFTER INSERT ON public.ticket_messages
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_ticket_message_notification();
+
+-- Trigger para Disparo de Boas-Vindas ao Criar Usuário (Supabase Auth)
+CREATE OR REPLACE FUNCTION public.trigger_user_welcome_notification()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_payload JSONB;
+  v_company_id UUID;
+  v_nome TEXT;
+BEGIN
+  BEGIN
+    v_company_id := (NEW.raw_user_meta_data->>'company_id')::UUID;
+  EXCEPTION WHEN OTHERS THEN
+    v_company_id := NULL;
+  END;
+
+  v_nome := COALESCE(NEW.raw_user_meta_data->>'nome', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1));
+
+  v_payload := jsonb_build_object(
+    'user_id', NEW.id,
+    'company_id', v_company_id,
+    'event_type', 'welcome_email',
+    'recipient_email', NEW.email,
+    'recipient_name', v_nome
+  );
+
+  BEGIN
+    PERFORM net.http_post(
+      url := 'https://vrkhkifhkztttukuxbwz.supabase.co/functions/v1/send-notification',
+      headers := '{"Content-Type": "application/json"}'::jsonb,
+      body := v_payload
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_auth_users_welcome ON auth.users;
+CREATE TRIGGER trg_auth_users_welcome
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_user_welcome_notification();
 `;
+
 
 async function executeSql(query: string) {
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
