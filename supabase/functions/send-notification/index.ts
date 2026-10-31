@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.18.1
+ * InfoTicket - Send Notification Edge Function v1.18.2
  * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
  * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
  * Suporte a envio oficial direto via SMTP (Host, Porta, Usuário, Senha, From Email, From Name)

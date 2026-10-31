@@ -929,7 +929,11 @@ export const dataService = {
     smtp_from_name?: string;
     recipient_test_email?: string;
   }): Promise<{ success: boolean; message: string }> {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
     try {
+      // 1. Invoca via Supabase SDK
       const result = await supabase.functions.invoke('test-smtp-connection', {
         body: {
           smtp_host: params.smtp_host.trim(),
@@ -944,23 +948,72 @@ export const dataService = {
 
       const { data, error } = result;
 
+      // Se retornou dados do JSON com sucesso
+      if (data) {
+        if (data.success) {
+          return {
+            success: true,
+            message: data.message || 'Servidor SMTP validado com sucesso!',
+          };
+        } else if (data.error || data.message) {
+          return {
+            success: false,
+            message: data.error || data.message,
+          };
+        }
+      }
+
+      // Se o SDK reportou erro (ex: FunctionsHttpError contendo body da Edge Function)
       if (error) {
-        console.warn('⚠️ Falha ao invocar test-smtp-connection via SDK, tentando fetch direto:', error);
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
-        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        console.warn('⚠️ SDK do Supabase reportou erro na Edge Function:', error);
 
-        const res = await fetch(`${supabaseUrl}/functions/v1/test-smtp-connection`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': anonKey,
-            'Authorization': `Bearer ${anonKey}`,
-          },
-          body: JSON.stringify(params),
-        });
+        // Tenta inspecionar se há detalhes na resposta do erro do SDK
+        let extractedMessage = '';
+        if ((error as any)?.context?.json) {
+          try {
+            const errJson = await (error as any).context.json();
+            extractedMessage = errJson.error || errJson.message;
+          } catch {
+            // continua
+          }
+        }
 
-        if (res.ok) {
-          return await res.json();
+        if (extractedMessage) {
+          return {
+            success: false,
+            message: extractedMessage,
+          };
+        }
+
+        // 2. Fallback de chamada HTTP direta para obter a resposta completa do servidor
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/test-smtp-connection`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': anonKey,
+              'Authorization': `Bearer ${anonKey}`,
+            },
+            body: JSON.stringify({
+              smtp_host: params.smtp_host.trim(),
+              smtp_port: Number(params.smtp_port),
+              smtp_user: params.smtp_user.trim(),
+              smtp_password: params.smtp_password.trim(),
+              smtp_from_email: params.smtp_from_email?.trim() || params.smtp_user.trim(),
+              smtp_from_name: params.smtp_from_name?.trim() || 'InfoTicket Teste',
+              recipient_test_email: params.recipient_test_email?.trim() || params.smtp_user.trim(),
+            }),
+          });
+
+          const resData = await res.json().catch(() => null);
+          if (resData) {
+            return {
+              success: Boolean(resData.success),
+              message: resData.error || resData.message || (res.ok ? 'Servidor validado.' : `HTTP ${res.status}: Erro desconhecido`),
+            };
+          }
+        } catch (fetchErr: any) {
+          console.warn('Falha no fallback fetch direto:', fetchErr);
         }
 
         return {
@@ -969,14 +1022,15 @@ export const dataService = {
         };
       }
 
-      return data || {
-        success: false,
-        message: 'Resposta vazia da Edge Function de teste SMTP.',
-      };
-    } catch (err: any) {
       return {
         success: false,
-        message: err.message || 'Erro ao conectar com a Edge Function test-smtp-connection.',
+        message: 'Resposta vazia ou formato inesperado da Edge Function.',
+      };
+    } catch (err: any) {
+      console.error('Erro na chamada testSmtpConnection:', err);
+      return {
+        success: false,
+        message: err.message || 'Erro de conexão com o serviço de validação SMTP.',
       };
     }
   },

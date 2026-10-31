@@ -231,7 +231,7 @@ export const SettingsPage: React.FC = () => {
     if (!smtpHost.trim() || !smtpPort.trim() || !smtpUser.trim() || !smtpPassword.trim()) {
       setSmtpFeedback({
         type: 'error',
-        message: 'Por favor, informe Host, Porta, Usuário e Senha para testar o servidor SMTP.',
+        message: 'Por favor, informe Servidor Host, Porta, Usuário e Senha para testar o servidor SMTP.',
       });
       return;
     }
@@ -258,13 +258,19 @@ export const SettingsPage: React.FC = () => {
       } else {
         setSmtpFeedback({
           type: 'error',
-          message: testResult.message,
+          message: testResult.message.startsWith('Falha SMTP')
+            ? testResult.message
+            : `Falha SMTP: ${testResult.message}`,
         });
       }
     } catch (err: any) {
+      console.error('Erro ao testar SMTP:', err);
+      const errorMsg = err?.message || 'Erro inesperado na comunicação com o servidor.';
       setSmtpFeedback({
         type: 'error',
-        message: err.message || 'Erro ao conectar na Edge Function de validação SMTP.',
+        message: errorMsg.includes('Failed to fetch')
+          ? 'Falha de rede (Failed to fetch): Não foi possível contatar a Edge Function. Certifique-se de que a função test-smtp-connection foi implantada no Supabase com deploy --no-verify-jwt.'
+          : `Falha SMTP: ${errorMsg}`,
       });
     } finally {
       setTestingSmtp(false);

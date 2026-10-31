@@ -2,9 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Test SMTP Connection Edge Function v1.18.1
- * Valida credenciais e handshake do servidor SMTP da empresa no backend (Deno)
- * Evita bloqueios de CORS e validação prematura no navegador
+ * InfoTicket - Test SMTP Connection Edge Function v1.18.2
+ * Valida credenciais e handshake do servidor SMTP corporativo no backend (Deno)
+ * Suporte robusto a CORS e retorno transparente de mensagens de erro
  */
 
 const corsHeaders = {
@@ -32,7 +32,7 @@ serve(async (req: Request) => {
   try {
     if (req.method !== "POST") {
       return new Response(
-        JSON.stringify({ error: "Método não permitido. Utilize POST." }),
+        JSON.stringify({ success: false, error: "Método não permitido. Utilize POST." }),
         { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -52,7 +52,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: false,
-          message: "Parâmetros obrigatórios ausentes: Host, Porta, Usuário e Senha são indispensáveis.",
+          error: "Parâmetros obrigatórios ausentes: Servidor Host, Porta, Usuário e Senha são indispensáveis.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -61,41 +61,41 @@ serve(async (req: Request) => {
     const portNum = Number(smtp_port);
     const isSecurePort = portNum === 465;
 
-    console.log(`📡 [Test SMTP v1.18.1] Testando conexão com ${smtp_host}:${portNum} (usuário: ${smtp_user})...`);
+    console.log(`📡 [Test SMTP v1.18.2] Conectando a ${smtp_host}:${portNum} (usuário: ${smtp_user})...`);
 
-    // Cria o transporter Nodemailer
+    // Cria o transporte SMTP com Nodemailer
     const transporter = nodemailer.createTransport({
       host: smtp_host.trim(),
       port: portNum,
-      secure: isSecurePort, // true para SSL direto na porta 465, false para STARTTLS (ex: porta 587)
+      secure: isSecurePort, // true para 465 (SSL), false para 587 (STARTTLS)
       auth: {
         user: smtp_user.trim(),
         pass: smtp_password.trim(),
       },
       tls: {
-        rejectUnauthorized: false, // Evita rejeição por certificados auto-assinados corporativos
+        rejectUnauthorized: false, // Evita rejeição de certificados auto-assinados de VPS/provedores
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,
     });
 
-    // 1. Testa verificação de credenciais e handshake SMTP
+    // 1. Testa verificação de credenciais e handshake SMTP (transporter.verify)
     try {
       await transporter.verify();
-      console.log("✅ [Test SMTP v1.18.1] Handshake e autenticação SMTP validados com sucesso!");
+      console.log("✅ [Test SMTP v1.18.2] Handshake e credenciais SMTP validados com sucesso!");
     } catch (verifyErr: any) {
-      console.error("❌ [Test SMTP v1.18.1] Falha na verificação SMTP:", verifyErr.message);
+      console.error("❌ [Test SMTP v1.18.2] Falha no handshake SMTP:", verifyErr.message);
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Falha na autenticação SMTP: ${verifyErr.message}. Verifique servidor, porta (587 ou 465) e credenciais.`,
+          error: `Falha na autenticação SMTP: ${verifyErr.message}`,
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Se um destinatário de teste for informado, despacha uma mensagem de teste
+    // 2. Se informado e-mail de teste, realiza envio de mensagem teste
     const fromAddr = smtp_from_email?.trim() || smtp_user.trim();
     const fromName = smtp_from_name?.trim() || "InfoTicket Teste";
     const targetRecipient = recipient_test_email?.trim() || smtp_user.trim();
@@ -107,10 +107,9 @@ serve(async (req: Request) => {
         subject: "[InfoTicket] Teste de Conexão SMTP Bem-Sucedido",
         text: `Olá!\n\nEste é um e-mail de teste disparado pelo InfoTicket para validar as credenciais do seu servidor SMTP.\n\nServidor: ${smtp_host}\nPorta: ${portNum}\nUsuário: ${smtp_user}\nData/Hora: ${new Date().toLocaleString("pt-BR")}\n\nSeu servidor de e-mail está configurado e pronto para uso em produção!`,
       });
-      console.log(`✉️ [Test SMTP v1.18.1] Mensagem de teste enviada para: ${targetRecipient}`);
+      console.log(`✉️ [Test SMTP v1.18.2] E-mail de confirmação enviado para: ${targetRecipient}`);
     } catch (sendErr: any) {
-      console.warn("⚠️ [Test SMTP v1.18.1] Conexão válida, mas envio de mensagem de teste falhou:", sendErr.message);
-      // Retorna sucesso com ressalva sobre o envio para a caixa postal
+      console.warn("⚠️ [Test SMTP v1.18.2] Conexão válida, mas envio do e-mail teste falhou:", sendErr.message);
       return new Response(
         JSON.stringify({
           success: true,
@@ -123,7 +122,7 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Servidor SMTP validado com sucesso! Um e-mail de confirmação foi enviado para ${targetRecipient}.`,
+        message: `Servidor SMTP validado com sucesso! Um e-mail de teste foi enviado para ${targetRecipient}.`,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -133,9 +132,10 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        message: error.message || "Erro interno ao processar teste do servidor SMTP.",
+        error: error.message || "Erro interno ao processar teste do servidor SMTP.",
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+
