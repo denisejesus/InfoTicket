@@ -1,15 +1,12 @@
 /**
- * InfoTicket - Seed de Templates Padrão de Comunicação (v1.11.1)
- * Executável via Node.js padrão (sem necessidade de compilação TS)
- * Insere na tabela communication_templates os 3 modelos básicos requeridos:
- * 1. Abertura (new_ticket)
- * 2. Mudança de Status (status_change)
- * 3. Nova Mensagem (new_message)
- * Utilizando estritamente as variáveis {{nome_cliente}} e {{ticket_id}}
+ * InfoTicket - Seed de Templates Padrão de Comunicação (v1.18.3)
+ * Utiliza o Supabase Client com Service Role Key para persistir
+ * os templates diretamente na tabela public.communication_templates
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,93 +28,212 @@ function loadEnv() {
 
 loadEnv();
 
-const projectRef = process.env.VITE_SUPABASE_PROJECT_REF || 'vrkhkifhkztttukuxbwz';
-const managementToken = process.env.VITE_SUPABASE_MANAGEMENT_TOKEN || 'sbp_fc94326bec0b83cfbe2c07d11ca7a008a1408e7c';
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
+const serviceRoleKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 
-async function executeSql(sql) {
-  const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${managementToken}`,
-    },
-    body: JSON.stringify({ query: sql }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Erro na API do Supabase (${response.status}): ${errorText}`);
-  }
-
-  return await response.json();
+if (!serviceRoleKey) {
+  console.error('❌ VITE_SUPABASE_SERVICE_ROLE_KEY não encontrada no .env');
+  process.exit(1);
 }
 
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = class DummyWebSocket {};
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+  realtime: { createClient: () => null },
+});
+
+function getEmailWrapper(content) {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .header { background: #0f172a; padding: 24px 32px; text-align: left; border-bottom: 2px solid #3b82f6; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .body { padding: 32px; font-size: 15px; line-height: 1.6; color: #334155; }
+    .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px; text-align: center; margin-top: 16px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
+    .info-box { background: #f1f5f9; border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 6px; margin: 18px 0; }
+    .footer { background: #f8fafc; padding: 20px 32px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>{{nome_empresa}}</h1>
+    </div>
+    <div class="body">
+      ${content}
+    </div>
+    <div class="footer">
+      <p style="margin: 0;">Este é um e-mail automático gerado pelo sistema InfoTicket. Por favor, não responda diretamente a esta mensagem.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// 1. Template: Nova Interação / Mensagem
+const newInteractionHtml = getEmailWrapper(`
+  <p>Olá {{nome_cliente}},</p>
+  <p>Uma nova interação foi registrada no seu chamado <b>#{{ticket_id}}</b> ("{{assunto}}").</p>
+  
+  <div class="info-box">
+    <b>Status: {{status}}</b><br>
+    <span style="font-size: 13px; color: #475569;">Autor da Mensagem: {{nome_remetente}}</span>
+    <p style="margin: 10px 0 0 0; font-style: italic; color: #1e293b;">"{{mensagem_resumo}}"</p>
+  </div>
+
+  <p>Para visualizar todos os detalhes ou responder à mensagem, clique no botão abaixo:</p>
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+  </p>
+
+  <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+    Atenciosamente,<br>
+    <b>Equipe de Atendimento {{nome_empresa}}</b>
+  </p>
+`);
+
+// 2. Template: Criação de Usuário / Boas-Vindas
+const welcomeEmailHtml = getEmailWrapper(`
+  <p>Olá {{nome_cliente}},</p>
+  <p>Seu acesso ao portal de atendimento <b>InfoTicket</b> foi criado com sucesso pela empresa <b>{{nome_empresa}}</b>.</p>
+  
+  <div class="info-box">
+    <p style="margin: 0 0 8px 0;"><b>Seus dados de acesso:</b></p>
+    <div><b>E-mail:</b> {{email_cliente}}</div>
+    <div><b>Senha temporária:</b> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #0f172a;">{{senha_temporaria}}</code></div>
+  </div>
+
+  <p>Recomendamos que você acesse a plataforma e altere sua senha no primeiro login para garantir a segurança da sua conta.</p>
+  
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="{{link_chamado}}" class="btn">Acessar Portal InfoTicket</a>
+  </p>
+
+  <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+    Atenciosamente,<br>
+    <b>Equipe de Suporte {{nome_empresa}}</b>
+  </p>
+`);
+
+// 3. Template: Alteração de Status
+const statusChangeHtml = getEmailWrapper(`
+  <p>Olá {{nome_cliente}},</p>
+  <p>O status do seu chamado <b>#{{ticket_id}}</b> ("{{assunto}}") foi atualizado.</p>
+  
+  <div class="info-box">
+    <p style="margin: 0; font-size: 16px;"><b>Status: {{status}}</b></p>
+    <p style="margin: 6px 0 0 0; font-size: 13px; color: #475569;">Prioridade: <b>{{prioridade}}</b> | Prazo SLA: <b>{{sla_prazo}}</b></p>
+  </div>
+
+  <p>Você pode acompanhar o andamento da sua solicitação em tempo real diretamente pelo portal:</p>
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+  </p>
+
+  <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+    Atenciosamente,<br>
+    <b>Equipe de Atendimento {{nome_empresa}}</b>
+  </p>
+`);
+
+// 4. Template: Abertura de Chamado
+const newTicketHtml = getEmailWrapper(`
+  <p>Olá {{nome_cliente}},</p>
+  <p>Confirmamos a abertura da sua solicitação <b>#{{ticket_id}}</b> ("{{assunto}}").</p>
+  
+  <div class="info-box">
+    <b>Status: {{status}}</b><br>
+    <span style="font-size: 13px; color: #475569;">Prazo Estimado (SLA): <b>{{sla_prazo}}</b> | Prioridade: <b>{{prioridade}}</b></span>
+  </div>
+
+  <p>Nossa equipe técnica já foi acionada. Clique no botão abaixo para acompanhar:</p>
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+  </p>
+
+  <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+    Atenciosamente,<br>
+    <b>Equipe de Atendimento {{nome_empresa}}</b>
+  </p>
+`);
+
 async function runSeedTemplates() {
-  console.log('🚀 [InfoTicket] Iniciando Seed de Templates Básicos de Comunicação (v1.11.1)...');
+  console.log('🚀 [InfoTicket v1.18.3] Semeando templates HTML profissionais...');
 
   try {
-    const companies = await executeSql(`SELECT id, razao_social FROM public.companies;`);
-    
-    if (!companies || companies.length === 0) {
-      console.log('⚠️ Nenhuma empresa encontrada. Certifique-se de que o banco possui a tabela companies.');
-    } else {
-      console.log(`📋 Encontradas ${companies.length} empresa(s) no sistema.`);
+    const { data: companies, error: compError } = await supabase
+      .from('companies')
+      .select('id, razao_social');
+
+    if (compError) {
+      throw new Error(`Erro ao buscar companies: ${compError.message}`);
     }
 
-    const seedSql = `
-      -- Inserção ou atualização dos 3 templates padrão para cada empresa cadastrada
-      DO $$
-      DECLARE
-          c RECORD;
-      BEGIN
-          FOR c IN SELECT id, razao_social FROM public.companies LOOP
-              -- 1. Modelo de Abertura de Chamado (Novo Chamado)
-              INSERT INTO public.communication_templates (company_id, tipo, assunto, corpo_mensagem)
-              VALUES (
-                  c.id,
-                  'new_ticket',
-                  'Chamado #{{ticket_id}} Aberto',
-                  'Olá {{nome_cliente}}, recebemos a sua solicitação com o identificador #{{ticket_id}}.\n\nNossa equipe técnica já está analisando o caso e dará retorno em breve.\n\nAtenciosamente,\nEquipe de Atendimento'
-              )
-              ON CONFLICT (company_id, tipo) DO UPDATE SET
-                  assunto = EXCLUDED.assunto,
-                  corpo_mensagem = EXCLUDED.corpo_mensagem,
-                  atualizado_em = NOW();
+    if (!companies || companies.length === 0) {
+      console.log('⚠️ Nenhuma empresa encontrada.');
+      return;
+    }
 
-              -- 2. Modelo de Mudança de Status
-              INSERT INTO public.communication_templates (company_id, tipo, assunto, corpo_mensagem)
-              VALUES (
-                  c.id,
-                  'status_change',
-                  'Atualização: Chamado #{{ticket_id}}',
-                  'Olá {{nome_cliente}}, o seu chamado mudou para o estado: {{status_atual}}.\n\nEstamos trabalhando para concluir o atendimento o mais rápido possível.\n\nAtenciosamente,\nEquipe de Atendimento'
-              )
-              ON CONFLICT (company_id, tipo) DO UPDATE SET
-                  assunto = EXCLUDED.assunto,
-                  corpo_mensagem = EXCLUDED.corpo_mensagem,
-                  atualizado_em = NOW();
+    console.log(`📋 Encontradas ${companies.length} empresa(s) no sistema.`);
 
-              -- 3. Modelo de Nova Mensagem
-              INSERT INTO public.communication_templates (company_id, tipo, assunto, corpo_mensagem)
-              VALUES (
-                  c.id,
-                  'new_message',
-                  'Nova interação no chamado #{{ticket_id}}',
-                  'Olá {{nome_cliente}}, há uma nova mensagem da nossa equipa no chamado #{{ticket_id}}.\n\nPor favor aceda ao portal para verificar os detalhes da resposta.\n\nAtenciosamente,\nEquipe de Atendimento'
-              )
-              ON CONFLICT (company_id, tipo) DO UPDATE SET
-                  assunto = EXCLUDED.assunto,
-                  corpo_mensagem = EXCLUDED.corpo_mensagem,
-                  atualizado_em = NOW();
+    for (const comp of companies) {
+      console.log(`🏢 Semeando templates para: ${comp.razao_social} (${comp.id})`);
 
-          END LOOP;
-      END $$;
-    `;
+      const templates = [
+        {
+          company_id: comp.id,
+          tipo: 'welcome_email',
+          assunto: 'Bem-vindo ao InfoTicket - {{nome_empresa}}',
+          corpo_mensagem: welcomeEmailHtml,
+        },
+        {
+          company_id: comp.id,
+          tipo: 'new_ticket',
+          assunto: '[InfoTicket] Chamado Aberto: #{{ticket_id}} - {{assunto}}',
+          corpo_mensagem: newTicketHtml,
+        },
+        {
+          company_id: comp.id,
+          tipo: 'status_change',
+          assunto: '[InfoTicket] Atualização de Status: Chamado #{{ticket_id}}',
+          corpo_mensagem: statusChangeHtml,
+        },
+        {
+          company_id: comp.id,
+          tipo: 'new_message',
+          assunto: '[InfoTicket] Nova Interação no Chamado #{{ticket_id}}',
+          corpo_mensagem: newInteractionHtml,
+        },
+      ];
 
-    console.log('⏳ Gravando templates padrão com as tags {{nome_cliente}} e {{ticket_id}}...');
-    await executeSql(seedSql);
+      for (const tpl of templates) {
+        const { error: upsertErr } = await supabase
+          .from('communication_templates')
+          .upsert(
+            {
+              ...tpl,
+              atualizado_em: new Date().toISOString(),
+            },
+            { onConflict: 'company_id,tipo' }
+          );
 
-    console.log('✅ [InfoTicket] Templates de Abertura, Mudança de Status e Nova Mensagem semeados com sucesso!');
+        if (upsertErr) {
+          console.warn(`  ⚠️ Erro ao inserir template ${tpl.tipo}:`, upsertErr.message);
+        } else {
+          console.log(`  ✅ Template '${tpl.tipo}' gravado com sucesso.`);
+        }
+      }
+    }
+
+    console.log('🎉 [InfoTicket v1.18.3] Todos os templates HTML foram semeados com sucesso!');
   } catch (error) {
     console.error('❌ Erro ao semear templates de comunicação:', error.message);
     process.exit(1);

@@ -3,11 +3,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.18.2
+ * InfoTicket - Send Notification Edge Function v1.18.3
  * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
  * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
+ * Renderiza templates HTML profissionais mapeados da tabela `communication_templates`
  * Suporte a envio oficial direto via SMTP (Host, Porta, Usuário, Senha, From Email, From Name)
- * Isolação multi-tenant via company_id com variáveis dinâmicas ({{nome_cliente}}, {{ticket_id}}, etc.)
+ * Isolação multi-tenant via company_id com variáveis dinâmicas ({{nome_cliente}}, {{link_chamado}}, {{status}}, etc.)
  * Tratamento de erros e auditoria de produção com registro de falhas e sucessos em `audit_logs`
  */
 
@@ -40,13 +41,46 @@ interface NotificationPayload {
   custom_data?: Record<string, string>;
 }
 
+// Layout HTML de fallback caso a empresa ainda não tenha template cadastrado
+function getDefaultHtmlWrapper(companyName: string, innerHtml: string): string {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .header { background: #0f172a; padding: 24px 32px; text-align: left; border-bottom: 2px solid #3b82f6; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .body { padding: 32px; font-size: 15px; line-height: 1.6; color: #334155; }
+    .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px; text-align: center; margin-top: 16px; }
+    .info-box { background: #f1f5f9; border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 6px; margin: 18px 0; }
+    .footer { background: #f8fafc; padding: 20px 32px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>${companyName}</h1>
+    </div>
+    <div class="body">
+      ${innerHtml}
+    </div>
+    <div class="footer">
+      <p style="margin: 0;">Este é um e-mail automático gerado pelo sistema InfoTicket.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 serve(async (req: Request) => {
   // Tratamento de pre-flight CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Cliente Supabase fora do try interno para poder registrar falhas em audit_logs
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
@@ -67,7 +101,7 @@ serve(async (req: Request) => {
     }
 
     const payload: NotificationPayload = await req.json();
-    console.log("📨 [Send Notification v1.12.0] Payload recebido:", JSON.stringify(payload));
+    console.log("📨 [Send Notification v1.18.3] Payload recebido:", JSON.stringify(payload));
 
     const { ticket_id, company_id, event_type, user_id } = payload;
     currentCompanyId = company_id || null;
@@ -102,9 +136,10 @@ serve(async (req: Request) => {
     let finalCorpo = "";
     let companyName = "InfoTicket";
 
+    const appUrl = Deno.env.get("PUBLIC_APP_URL") || "https://infoticket.app";
+
     // -------------------------------------------------------------
-    // CASO 1: BOAS-VINDAS / NOVO USUÁRIO (welcome_email)
-    // Pode ocorrer sem ticket_id vinculado (ex: trigger de auth.users ou cadastro)
+    // CASO 1: BOAS-VINDAS / CRIAÇÃO DE USUÁRIO (welcome_email)
     // -------------------------------------------------------------
     if (normalizedEventType === "welcome_email") {
       let targetUserEmail = payload.recipient_email;
@@ -132,9 +167,25 @@ serve(async (req: Request) => {
 
       recipientEmails = [targetUserEmail];
 
-      // Busca template da empresa, se houver company_id
+      // Template padrão HTML
       let templateAssunto = `Bem-vindo ao InfoTicket - {{nome_empresa}}`;
-      let templateCorpo = `Olá, {{nome_cliente}}!\n\nSeu acesso ao portal InfoTicket foi criado com sucesso.\n\nEmpresa: {{nome_empresa}}\nE-mail de acesso: {{email_cliente}}\nSenha temporária: {{senha_temporaria}}\n\nAcesse o portal e altere sua senha no primeiro login: {{portal_url}}\n\nAtenciosamente,\nEquipe {{nome_empresa}}`;
+      let templateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+        <p>Olá {{nome_cliente}},</p>
+        <p>Seu acesso ao portal de atendimento <b>InfoTicket</b> foi criado com sucesso pela empresa <b>{{nome_empresa}}</b>.</p>
+        <div class="info-box">
+          <p style="margin: 0 0 8px 0;"><b>Seus dados de acesso:</b></p>
+          <div><b>E-mail:</b> {{email_cliente}}</div>
+          <div><b>Senha temporária:</b> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #0f172a;">{{senha_temporaria}}</code></div>
+        </div>
+        <p>Recomendamos que você acesse a plataforma e altere sua senha no primeiro login para garantir a segurança da sua conta.</p>
+        <p style="text-align: center; margin: 28px 0;">
+          <a href="{{link_chamado}}" class="btn">Acessar Portal InfoTicket</a>
+        </p>
+        <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+          Atenciosamente,<br>
+          <b>Equipe de Suporte {{nome_empresa}}</b>
+        </p>
+      `);
 
       if (currentCompanyId) {
         const { data: tpl } = await supabase
@@ -154,7 +205,9 @@ serve(async (req: Request) => {
         "{{email_cliente}}": targetUserEmail,
         "{{nome_empresa}}": companyName,
         "{{senha_temporaria}}": tempPass,
-        "{{portal_url}}": Deno.env.get("PUBLIC_APP_URL") || "https://infoticket.app",
+        "{{portal_url}}": appUrl,
+        "{{link_chamado}}": appUrl,
+        "{{ticket_link}}": appUrl,
         ...(payload.custom_data || {}),
       };
 
@@ -167,7 +220,7 @@ serve(async (req: Request) => {
 
     } else {
       // -------------------------------------------------------------
-      // CASO 2: NOTIFICAÇÕES VINCULADAS A TICKET (status_change, new_message, etc.)
+      // CASO 2: NOTIFICAÇÕES VINCULADAS A TICKET (new_message, status_change, new_ticket, etc.)
       // -------------------------------------------------------------
       if (!ticket_id) {
         return new Response(
@@ -204,7 +257,7 @@ serve(async (req: Request) => {
       currentCompanyId = ticket.company_id;
       companyName = ticket.company?.razao_social || companyName;
 
-      // Busca o template customizado
+      // Busca o template customizado na tabela communication_templates
       const { data: template } = await supabase
         .from("communication_templates")
         .select("*")
@@ -212,15 +265,99 @@ serve(async (req: Request) => {
         .eq("tipo", normalizedEventType)
         .maybeSingle();
 
-      let defaultTemplateAssunto = `[InfoTicket] Atualização no Chamado #${ticket.id.substring(0, 8)} - {{assunto}}`;
-      let defaultTemplateCorpo = `Olá, {{nome_cliente}}!\n\nHouve uma atualização no seu chamado #{{ticket_id}} ("{{assunto}}").\nStatus atual: {{status_atual}}\n\nAcesse: {{ticket_link}}\n\nAtenciosamente,\n{{nome_empresa}}`;
+      const ticketShortId = ticket.id.substring(0, 8);
+      const ticketLink = `${appUrl}/tickets/${ticket.id}`;
 
-      if (normalizedEventType === "ticket_atribuido") {
-        defaultTemplateAssunto = `[InfoTicket] Chamado Delegado a Você: #${ticket.id.substring(0, 8)} - {{assunto}}`;
-        defaultTemplateCorpo = `Olá, {{nome_operador}}!\n\nO chamado #{{ticket_id}} ("{{assunto}}") aberto por {{nome_cliente}} foi atribuído a você como operador responsável.\n\nPrioridade: {{prioridade}}\nPrazo SLA: {{sla_prazo}}\n\nAcesse o chamado para atendimento: {{ticket_link}}\n\nBom trabalho!\n{{nome_empresa}}`;
-      } else if (normalizedEventType === "new_message") {
-        defaultTemplateAssunto = `[InfoTicket] Nova mensagem no Chamado #${ticket.id.substring(0, 8)} - {{assunto}}`;
-        defaultTemplateCorpo = `Olá!\n\nHá uma nova mensagem registrada no chamado #{{ticket_id}} ("{{assunto}}") por {{nome_remetente}}:\n\n"{{mensagem_resumo}}"\n\nAcesse para responder: {{ticket_link}}\n\nAtenciosamente,\n{{nome_empresa}}`;
+      // Monta defaults em HTML caso a tabela não tenha o registro
+      let defaultTemplateAssunto = `[InfoTicket] Atualização no Chamado #${ticketShortId} - {{assunto}}`;
+      let defaultTemplateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+        <p>Olá {{nome_cliente}},</p>
+        <p>Houve uma atualização no seu chamado <b>#{{ticket_id}}</b> ("{{assunto}}").</p>
+        <div class="info-box">
+          <b>Status: {{status}}</b>
+        </div>
+        <p>Acesse o chamado para conferir os detalhes:</p>
+        <p style="text-align: center; margin: 28px 0;">
+          <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+        </p>
+        <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+          Atenciosamente,<br>
+          <b>Equipe {{nome_empresa}}</b>
+        </p>
+      `);
+
+      if (normalizedEventType === "new_message") {
+        defaultTemplateAssunto = `[InfoTicket] Nova Interação no Chamado #${ticketShortId}`;
+        defaultTemplateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+          <p>Olá {{nome_cliente}},</p>
+          <p>Uma nova interação foi registrada no seu chamado <b>#{{ticket_id}}</b> ("{{assunto}}").</p>
+          <div class="info-box">
+            <b>Status: {{status}}</b><br>
+            <span style="font-size: 13px; color: #475569;">Autor: {{nome_remetente}}</span>
+            <p style="margin: 10px 0 0 0; font-style: italic; color: #1e293b;">"{{mensagem_resumo}}"</p>
+          </div>
+          <p>Para responder ou visualizar o histórico completo, clique no botão abaixo:</p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+          </p>
+          <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+            Atenciosamente,<br>
+            <b>Equipe {{nome_empresa}}</b>
+          </p>
+        `);
+      } else if (normalizedEventType === "status_change") {
+        defaultTemplateAssunto = `[InfoTicket] Atualização de Status: Chamado #${ticketShortId}`;
+        defaultTemplateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+          <p>Olá {{nome_cliente}},</p>
+          <p>O status do seu chamado <b>#{{ticket_id}}</b> ("{{assunto}}") foi atualizado.</p>
+          <div class="info-box">
+            <p style="margin: 0; font-size: 16px;"><b>Status: {{status}}</b></p>
+            <p style="margin: 6px 0 0 0; font-size: 13px; color: #475569;">Prioridade: <b>{{prioridade}}</b> | Prazo SLA: <b>{{sla_prazo}}</b></p>
+          </div>
+          <p>Você pode acompanhar o andamento da sua solicitação em tempo real diretamente pelo portal:</p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+          </p>
+          <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+            Atenciosamente,<br>
+            <b>Equipe {{nome_empresa}}</b>
+          </p>
+        `);
+      } else if (normalizedEventType === "new_ticket") {
+        defaultTemplateAssunto = `[InfoTicket] Chamado Aberto: #${ticketShortId} - {{assunto}}`;
+        defaultTemplateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+          <p>Olá {{nome_cliente}},</p>
+          <p>Confirmamos a abertura da sua solicitação <b>#{{ticket_id}}</b> ("{{assunto}}").</p>
+          <div class="info-box">
+            <b>Status: {{status}}</b><br>
+            <span style="font-size: 13px; color: #475569;">Prazo Estimado (SLA): <b>{{sla_prazo}}</b> | Prioridade: <b>{{prioridade}}</b></span>
+          </div>
+          <p>Nossa equipe técnica já foi acionada. Clique no botão abaixo para acompanhar:</p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+          </p>
+          <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+            Atenciosamente,<br>
+            <b>Equipe {{nome_empresa}}</b>
+          </p>
+        `);
+      } else if (normalizedEventType === "ticket_atribuido") {
+        defaultTemplateAssunto = `[InfoTicket] Chamado Delegado a Você: #${ticketShortId} - {{assunto}}`;
+        defaultTemplateCorpo = getDefaultHtmlWrapper("{{nome_empresa}}", `
+          <p>Olá {{nome_operador}},</p>
+          <p>O chamado <b>#{{ticket_id}}</b> ("{{assunto}}") aberto por {{nome_cliente}} foi atribuído a você como operador responsável.</p>
+          <div class="info-box">
+            <b>Prioridade:</b> {{prioridade}}<br>
+            <b>Prazo SLA:</b> {{sla_prazo}}
+          </div>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="{{link_chamado}}" class="btn">Ver Chamado</a>
+          </p>
+          <p style="margin-top: 24px; font-size: 14px; color: #64748b;">
+            Bom trabalho!<br>
+            <b>{{nome_empresa}}</b>
+          </p>
+        `);
       }
 
       const assuntoTemplate = template?.assunto || defaultTemplateAssunto;
@@ -231,9 +368,6 @@ serve(async (req: Request) => {
       const clienteEmail = ticket.cliente?.email;
       const operadorNome = ticket.operador?.nome || "Operador Responsável";
       const operadorEmail = ticket.operador?.email;
-      const ticketShortId = ticket.id.substring(0, 8);
-      const appUrl = Deno.env.get("PUBLIC_APP_URL") || "https://infoticket.app";
-      const ticketLink = `${appUrl}/tickets/${ticket.id}`;
 
       let slaPrazo = "Não informado";
       if (ticket.sla_vencimento) {
@@ -268,9 +402,11 @@ serve(async (req: Request) => {
         "{{nome_operador}}": operadorNome,
         "{{nome_empresa}}": companyName,
         "{{ticket_id}}": ticketShortId,
-        "{{assunto}}": ticket.assunto,
+        "{{assunto}}": ticket.assunto || "Sem Assunto",
+        "{{status}}": ticket.status,
         "{{status_atual}}": ticket.status,
         "{{prioridade}}": ticket.prioridade || "Média",
+        "{{link_chamado}}": ticketLink,
         "{{ticket_link}}": ticketLink,
         "{{sla_prazo}}": slaPrazo,
         "{{resumo}}": ticket.resumo_conclusao || "Chamado concluído com êxito.",
@@ -287,15 +423,23 @@ serve(async (req: Request) => {
         finalCorpo = finalCorpo.replaceAll(tag, val);
       }
 
+      // Se o corpo do template for texto simples sem tags HTML, encapsula em parágrafos e wrapper HTML
+      if (!/<[a-z][\s\S]*>/i.test(finalCorpo)) {
+        const paragraphs = finalCorpo
+          .split("\n\n")
+          .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+          .join("");
+        finalCorpo = getDefaultHtmlWrapper(companyName, paragraphs);
+      }
+
       // -------------------------------------------------------------
-      // Determinação dos Destinatários com regras completas
+      // Determinação dos Destinatários
       // -------------------------------------------------------------
       if (normalizedEventType === "ticket_atribuido") {
         if (operadorEmail) {
           recipientEmails = [operadorEmail];
         }
       } else if (normalizedEventType === "status_change") {
-        // Gerente, Gestor, Operador e Cliente
         const { data: managers } = await supabase
           .from("profiles")
           .select("email, role, recebe_notificacoes")
@@ -317,8 +461,6 @@ serve(async (req: Request) => {
         recipientEmails = Array.from(new Set([...managerEmails, ...opList, ...clList]));
 
       } else if (normalizedEventType === "new_message") {
-        // Interações: notifica a equipe (Operador, Gerentes/Gestores) e o Cliente
-        // Excluindo o próprio autor da mensagem para não gerar loop
         const { data: managers } = await supabase
           .from("profiles")
           .select("id, email, role, recebe_notificacoes")
@@ -341,7 +483,6 @@ serve(async (req: Request) => {
         recipientEmails = Array.from(new Set([...managerEmails, ...opList, ...clList]));
 
       } else {
-        // novo_chamado, csat, etc.
         const clList = (clienteEmail && ticket.cliente?.recebe_notificacoes !== false) ? [clienteEmail] : [];
         recipientEmails = clList;
       }
@@ -358,13 +499,19 @@ serve(async (req: Request) => {
     console.log(`✉️ [Email] Destinatários (${recipientEmails.length}):`, recipientEmails);
     console.log(`📌 [Email] Assunto: ${finalAssunto}`);
 
+    // Cria versão texto puro a partir do HTML para fallback em clientes legados
+    const plainTextFallback = finalCorpo
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
     // -------------------------------------------------------------
-    // DISPARO DE E-MAIL MULTI-TENANT (Fase 18.1 - SMTP Corporativo)
+    // DISPARO DE E-MAIL MULTI-TENANT (SMTP Corporativo)
     // -------------------------------------------------------------
     let providerStatus = "mocked";
     let providerErrorDetails: string | null = null;
 
-    // Busca credenciais SMTP da empresa ativa
     let companySmtp: {
       smtp_host?: string | null;
       smtp_port?: number | null;
@@ -400,7 +547,7 @@ serve(async (req: Request) => {
       const fromAddr = companySmtp!.smtp_from_email?.trim() || companySmtp!.smtp_user!.trim();
       const fromName = companySmtp!.smtp_from_name?.trim() || companyName;
 
-      console.log(`📡 [Send Notification v1.18.1] Enviando via SMTP Corporativo do Tenant (${companySmtp!.smtp_host}:${portNum})`);
+      console.log(`📡 [Send Notification v1.18.3] Enviando via SMTP Corporativo (${companySmtp!.smtp_host}:${portNum})`);
 
       try {
         const transporter = nodemailer.createTransport({
@@ -419,16 +566,17 @@ serve(async (req: Request) => {
           socketTimeout: 18000,
         });
 
-        // Envia para todos os destinatários elegíveis
+        // Envia para todos os destinatários elegíveis com suporte a HTML
         const info = await transporter.sendMail({
           from: `"${fromName}" <${fromAddr}>`,
           to: recipientEmails.join(", "),
           subject: finalAssunto,
-          text: finalCorpo,
+          text: plainTextFallback,
+          html: finalCorpo,
         });
 
         providerStatus = "sent_via_tenant_smtp";
-        console.log(`✅ [SMTP Tenant] E-mail corporativo enviado com sucesso! MessageID: ${info.messageId}`);
+        console.log(`✅ [SMTP Tenant] E-mail corporativo HTML enviado com sucesso! MessageID: ${info.messageId}`);
       } catch (smtpErr: any) {
         providerStatus = "tenant_smtp_error";
         providerErrorDetails = smtpErr.message;
@@ -436,7 +584,7 @@ serve(async (req: Request) => {
       }
 
     } else {
-      // 2. FALLBACK: Se o Tenant ainda não configurou SMTP próprio, verifica chaves globais
+      // 2. FALLBACK: Provedores de e-mail de contingência (Resend / SendGrid)
       const resendApiKey = Deno.env.get("RESEND_API_KEY");
       const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
       const emailSender = Deno.env.get("EMAIL_FROM") || "InfoTicket <notificacoes@infocast-web.com.br>";
@@ -453,7 +601,8 @@ serve(async (req: Request) => {
               from: emailSender,
               to: recipientEmails,
               subject: finalAssunto,
-              text: finalCorpo,
+              text: plainTextFallback,
+              html: finalCorpo,
             }),
           });
 
@@ -483,7 +632,10 @@ serve(async (req: Request) => {
               personalizations: [{ to: recipientEmails.map((email) => ({ email })) }],
               from: { email: emailSender.match(/<([^>]+)>/)?.[1] || emailSender, name: companyName },
               subject: finalAssunto,
-              content: [{ type: "text/plain", value: finalCorpo }],
+              content: [
+                { type: "text/plain", value: plainTextFallback },
+                { type: "text/html", value: finalCorpo }
+              ],
             }),
           });
 
@@ -509,9 +661,9 @@ serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------------
-    // REGISTRO DE LOG / AUDITORIA DE PRODUÇÃO
+    // REGISTRO DE LOG / AUDITORIA DE PRODUÇÃO (audit_logs)
     // -------------------------------------------------------------
-    const isFailure = providerStatus.includes("error") || providerStatus.includes("exception");
+    const isFailure = providerStatus.includes("error") || providerStatus.includes("exception") || providerStatus === "no_smtp_configured";
     const logAction = isFailure
       ? `[FALHA DISPARO E-MAIL] Evento '${normalizedEventType}'. Erro: ${providerErrorDetails || providerStatus}`
       : `Disparou notificação por e-mail (${normalizedEventType}) para ${recipientEmails.join(", ")} [Status: ${providerStatus}]`;
@@ -524,8 +676,8 @@ serve(async (req: Request) => {
           user_id: currentUserId,
           acao: logAction,
         });
-      } catch (logErr) {
-        console.warn("⚠️ Aviso ao gravar audit_logs:", logErr);
+      } catch (logErr: any) {
+        console.warn("⚠️ Aviso ao gravar audit_logs:", logErr.message);
       }
     }
 
@@ -554,15 +706,14 @@ serve(async (req: Request) => {
           user_id: currentUserId,
           acao: `[ERRO FATAL E-MAIL] Falha na execução da Edge Function: ${err.message}`,
         });
-      } catch (_) {
-        // preserva
+      } catch (insertErr: any) {
+        console.warn("⚠️ Falha ao registrar log fatal em audit_logs:", insertErr.message);
       }
     }
 
     return new Response(
-      JSON.stringify({ error: err.message || "Erro interno na Edge Function." }),
+      JSON.stringify({ success: false, error: err.message || "Erro interno na Edge Function." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
-
