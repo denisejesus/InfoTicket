@@ -602,7 +602,41 @@ ON CONFLICT (company_id, tipo) DO UPDATE SET
   corpo_mensagem = EXCLUDED.corpo_mensagem,
   atualizado_em = NOW();
 
--- 11. Triggers e Funções para Automação de Notificações (Fase 11)
+-- 11. Triggers e Funções para Automação de Notificações
+-- GATILHO 1: Abertura de Chamado (Novo Ticket - AFTER INSERT)
+CREATE OR REPLACE FUNCTION public.trigger_ticket_created_notification()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_payload JSONB;
+BEGIN
+  v_payload := jsonb_build_object(
+    'ticket_id', NEW.id,
+    'company_id', NEW.company_id,
+    'event_type', 'new_ticket',
+    'user_id', COALESCE(NEW.cliente_id, auth.uid())
+  );
+
+  BEGIN
+    PERFORM net.http_post(
+      url := 'https://vrkhkifhkztttukuxbwz.supabase.co/functions/v1/send-notification',
+      headers := '{"Content-Type": "application/json"}'::jsonb,
+      body := v_payload
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_tickets_created ON public.tickets;
+CREATE TRIGGER trg_tickets_created
+AFTER INSERT ON public.tickets
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_ticket_created_notification();
+
+-- GATILHO 2: Alteração de Status (AFTER UPDATE OF status)
 CREATE OR REPLACE FUNCTION public.trigger_ticket_status_notification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -637,13 +671,12 @@ AFTER UPDATE OF status ON public.tickets
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_ticket_status_notification();
 
--- Trigger para Notificação de Atribuição de Operador (Fase 12.1)
+-- GATILHO 3: Atribuição de Operador (AFTER UPDATE OF operador_id)
 CREATE OR REPLACE FUNCTION public.trigger_ticket_assignment_notification()
 RETURNS TRIGGER AS $$
 DECLARE
   v_payload JSONB;
 BEGIN
-  -- Dispara apenas quando operador_id for alterado e não for nulo
   IF (NEW.operador_id IS DISTINCT FROM OLD.operador_id AND NEW.operador_id IS NOT NULL) THEN
     v_payload := jsonb_build_object(
       'ticket_id', NEW.id,
@@ -677,6 +710,7 @@ EXECUTE FUNCTION public.trigger_ticket_assignment_notification();
 -- Garante coluna chatwoot_conversation_id na tabela tickets
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS chatwoot_conversation_id INT;
 
+-- GATILHO 4: Nova Interação (AFTER INSERT ON ticket_messages)
 CREATE OR REPLACE FUNCTION public.trigger_ticket_message_notification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -706,7 +740,7 @@ BEGIN
       END;
     END IF;
 
-    -- Disparo da notificação por e-mail via send-notification
+    -- Disparo da notificação por e-mail via send-notification de produção
     v_payload := jsonb_build_object(
       'ticket_id', NEW.ticket_id,
       'company_id', NEW.company_id,
@@ -736,7 +770,7 @@ AFTER INSERT ON public.ticket_messages
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_ticket_message_notification();
 
--- 12. Trigger para Disparo de Boas-Vindas e Credenciais ao Criar Usuário (Supabase Auth)
+-- GATILHO 5: Disparo de Boas-Vindas e Credenciais ao Criar Usuário (Supabase Auth)
 CREATE OR REPLACE FUNCTION public.trigger_user_welcome_notification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -744,7 +778,6 @@ DECLARE
   v_company_id UUID;
   v_nome TEXT;
 BEGIN
-  -- Extrai metadados do usuário ou busca no profile criado
   BEGIN
     v_company_id := (NEW.raw_user_meta_data->>'company_id')::UUID;
   EXCEPTION WHEN OTHERS THEN

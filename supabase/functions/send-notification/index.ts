@@ -3,12 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.18.6
+ * InfoTicket - Send Notification Edge Function v1.18.7
  * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
  * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
  * Renderiza templates HTML profissionais mapeados da tabela `communication_templates`
  * Suporte a envio oficial direto via SMTP (Host, Porta, Usuário, Senha, From Email, From Name)
- * Suporte automático a ambiente local (Inbucket porta 54324)
  * Configuração dinâmica de TLS/SSL (Porta 465 SSL, Porta 587/outras com requireTLS)
  * Isolamento de falhas de envio: erros de SMTP não travam o fluxo do usuário (HTTP 200)
  * Auditoria com registro de falhas e sucessos em `audit_logs`
@@ -104,7 +103,7 @@ serve(async (req: Request) => {
     }
 
     const payload: NotificationPayload = await req.json();
-    console.log("📨 [Send Notification v1.18.4] Payload recebido:", JSON.stringify(payload));
+    console.log("📨 [Send Notification v1.18.7] Payload recebido:", JSON.stringify(payload));
 
     const { ticket_id, company_id, event_type, user_id } = payload;
     currentCompanyId = company_id || null;
@@ -530,95 +529,20 @@ serve(async (req: Request) => {
       .trim();
 
     // -------------------------------------------------------------
-    // DISPARO DE E-MAIL (Ambiente Local vs Multi-Tenant SMTP Corporativo)
+    // DISPARO DE E-MAIL MULTI-TENANT (SMTP Corporativo Oficial)
     // -------------------------------------------------------------
     let providerStatus = "mocked";
     let providerErrorDetails: string | null = null;
 
-    // Detecta se estamos rodando em ambiente local (Inbucket)
-    const isLocalEnv = 
-      Deno.env.get("IS_LOCAL") === "true" ||
-      supabaseUrl.includes("localhost") ||
-      supabaseUrl.includes("127.0.0.1") ||
-      supabaseUrl.includes("kong");
-
-    if (isLocalEnv) {
-      // 1. AMBIENTE LOCAL: Inbucket (Porta 54324, sem autenticação)
-      const inbucketHost = Deno.env.get("INBUCKET_HOST") || "127.0.0.1";
-      const inbucketPort = Number(Deno.env.get("INBUCKET_PORT") || 54324);
-      const fromAddr = "notificacoes@infoticket.local";
-      const fromName = companyName || "InfoTicket Local";
-
-      console.log(`🏠 [Send Notification v1.18.4] Ambiente Local Detectado! Usando Inbucket em ${inbucketHost}:${inbucketPort}`);
-
-      try {
-        const localTransporter = nodemailer.createTransport({
-          host: inbucketHost,
-          port: inbucketPort,
-          secure: false,
-          ignoreTLS: true,
-          connectionTimeout: 5000,
-          greetingTimeout: 5000,
-          socketTimeout: 8000,
-        });
-
-        const info = await localTransporter.sendMail({
-          from: `"${fromName}" <${fromAddr}>`,
-          to: recipientEmails.join(", "),
-          subject: finalAssunto,
-          text: plainTextFallback,
-          html: finalCorpo,
-        });
-
-        providerStatus = "sent_via_inbucket";
-        console.log(`✅ [Inbucket Local] E-mail capturado com sucesso! MessageID: ${info.messageId}`);
-      } catch (inbucketErr: any) {
-        // Tenta fallback com host.docker.internal caso 127.0.0.1 falhe dentro do container Deno
-        if (inbucketHost === "127.0.0.1") {
-          try {
-            console.log("🔄 Tentando Inbucket via host.docker.internal:54324...");
-            const fallbackTransporter = nodemailer.createTransport({
-              host: "host.docker.internal",
-              port: inbucketPort,
-              secure: false,
-              ignoreTLS: true,
-              connectionTimeout: 5000,
-              greetingTimeout: 5000,
-              socketTimeout: 8000,
-            });
-
-            const info = await fallbackTransporter.sendMail({
-              from: `"${fromName}" <${fromAddr}>`,
-              to: recipientEmails.join(", "),
-              subject: finalAssunto,
-              text: plainTextFallback,
-              html: finalCorpo,
-            });
-
-            providerStatus = "sent_via_inbucket_docker";
-            console.log(`✅ [Inbucket Docker] E-mail capturado com sucesso! MessageID: ${info.messageId}`);
-          } catch (dockerErr: any) {
-            providerStatus = "inbucket_error";
-            providerErrorDetails = dockerErr.message;
-            console.error("❌ [Inbucket Local] Falha ao enviar para Inbucket:", dockerErr.message);
-          }
-        } else {
-          providerStatus = "inbucket_error";
-          providerErrorDetails = inbucketErr.message;
-          console.error("❌ [Inbucket Local] Falha ao enviar para Inbucket:", inbucketErr.message);
-        }
-      }
-
-    } else {
-      // 2. AMBIENTE PRODUÇÃO: Disparo via Servidor SMTP Corporativo da Empresa (Multi-Tenant)
-      let companySmtp: {
-        smtp_host?: string | null;
-        smtp_port?: number | null;
-        smtp_user?: string | null;
-        smtp_password?: string | null;
-        smtp_from_email?: string | null;
-        smtp_from_name?: string | null;
-      } | null = null;
+    // 1. PRIORIDADE: Disparo via Servidor SMTP Corporativo da Empresa (Multi-Tenant)
+    let companySmtp: {
+      smtp_host?: string | null;
+      smtp_port?: number | null;
+      smtp_user?: string | null;
+      smtp_password?: string | null;
+      smtp_from_email?: string | null;
+      smtp_from_name?: string | null;
+    } | null = null;
 
       if (currentCompanyId) {
         const { data: comp } = await supabase
@@ -765,7 +689,6 @@ serve(async (req: Request) => {
           providerErrorDetails = "Servidor SMTP corporativo não configurado na empresa.";
         }
       }
-    }
 
     // -------------------------------------------------------------
     // REGISTRO DE LOG / AUDITORIA DE PRODUÇÃO (audit_logs)
