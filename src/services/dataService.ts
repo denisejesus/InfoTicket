@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
 
 /**
- * Serviço de dados do InfoTicket v1.18.1
+ * Serviço de dados do TicketFlow v1.18.2
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -941,7 +941,7 @@ export const dataService = {
           smtp_user: params.smtp_user.trim(),
           smtp_password: params.smtp_password.trim(),
           smtp_from_email: params.smtp_from_email?.trim() || params.smtp_user.trim(),
-          smtp_from_name: params.smtp_from_name?.trim() || 'InfoTicket Teste',
+          smtp_from_name: params.smtp_from_name?.trim() || 'TicketFlow Teste',
           recipient_test_email: params.recipient_test_email?.trim() || params.smtp_user.trim(),
         },
       });
@@ -1000,7 +1000,7 @@ export const dataService = {
               smtp_user: params.smtp_user.trim(),
               smtp_password: params.smtp_password.trim(),
               smtp_from_email: params.smtp_from_email?.trim() || params.smtp_user.trim(),
-              smtp_from_name: params.smtp_from_name?.trim() || 'InfoTicket Teste',
+              smtp_from_name: params.smtp_from_name?.trim() || 'TicketFlow Teste',
               recipient_test_email: params.recipient_test_email?.trim() || params.smtp_user.trim(),
             }),
           });
@@ -1178,31 +1178,31 @@ export const dataService = {
       {
         company_id: companyId,
         tipo: 'welcome_email',
-        assunto: 'Bem-vindo ao InfoTicket - {{nome_empresa}}',
+        assunto: 'Bem-vindo ao TicketFlow - {{nome_empresa}}',
         corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nSeja muito bem-vindo ao portal de atendimento da {{nome_empresa}}.\nSeu acesso foi configurado com sucesso e nossa equipe está à disposição para auxiliá-lo.\n\nAcesse nosso portal a qualquer momento: {{portal_url}}\n\nAtenciosamente,\nEquipe de Suporte {{nome_empresa}}',
       },
       {
         company_id: companyId,
         tipo: 'new_ticket',
-        assunto: '[InfoTicket] Chamado Aberto com Sucesso: #{{ticket_id}} - {{assunto}}',
+        assunto: '[TicketFlow] Chamado Aberto com Sucesso: #{{ticket_id}} - {{assunto}}',
         corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nConfirmamos a abertura do seu chamado #{{ticket_id}} sobre "{{assunto}}".\nNossa equipe técnica já foi notificada e o prazo estimado de atendimento (SLA) é de {{sla_prazo}}.\n\nVocê pode acompanhar e interagir diretamente pelo link: {{ticket_link}}\n\nAtenciosamente,\nEquipe {{nome_empresa}}',
       },
       {
         company_id: companyId,
         tipo: 'status_change',
-        assunto: '[InfoTicket] Atualização no Chamado #{{ticket_id}}: Status alterado para {{status_atual}}',
+        assunto: '[TicketFlow] Atualização no Chamado #{{ticket_id}}: Status alterado para {{status_atual}}',
         corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nInformamos que o status do seu chamado #{{ticket_id}} foi atualizado para: {{status_atual}}.\n\nPara verificar o andamento ou enviar mais informações, acesse: {{ticket_link}}\n\nAtenciosamente,\nEquipe {{nome_empresa}}',
       },
       {
         company_id: companyId,
         tipo: 'new_message',
-        assunto: '[InfoTicket] Nova Interação no Chamado #{{ticket_id}}',
+        assunto: '[TicketFlow] Nova Interação no Chamado #{{ticket_id}}',
         corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nHá uma nova mensagem registrada no seu chamado #{{ticket_id}} por {{nome_remetente}}:\n\n"{{mensagem_resumo}}"\n\nResponda diretamente através do portal: {{ticket_link}}\n\nAtenciosamente,\nEquipe {{nome_empresa}}',
       },
       {
         company_id: companyId,
         tipo: 'csat',
-        assunto: '[InfoTicket] Como foi seu atendimento no Chamado #{{ticket_id}}?',
+        assunto: '[TicketFlow] Como foi seu atendimento no Chamado #{{ticket_id}}?',
         corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nSeu chamado #{{ticket_id}} ("{{assunto}}") foi concluído pela nossa equipe.\n\nResumo da Conclusão:\n{{resumo}}\n\nSua opinião é fundamental para melhorarmos continuamente. Por favor, avalie nosso atendimento acessando: {{ticket_link}}\n\nMuito obrigado!\nEquipe {{nome_empresa}}',
       },
     ];

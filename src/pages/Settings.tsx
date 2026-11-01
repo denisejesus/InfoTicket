@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Configurações da Empresa v1.18.1
+ * TicketFlow - Configurações da Empresa v1.18.2
  * Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
  * Interface Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
@@ -246,7 +246,7 @@ export const SettingsPage: React.FC = () => {
         smtp_user: smtpUser,
         smtp_password: smtpPassword,
         smtp_from_email: smtpFromEmail || smtpUser,
-        smtp_from_name: smtpFromName || company?.razao_social || 'InfoTicket',
+        smtp_from_name: smtpFromName || company?.razao_social || 'TicketFlow',
         recipient_test_email: testRecipientEmail || smtpUser,
       });
 
@@ -1190,7 +1190,7 @@ export const SettingsPage: React.FC = () => {
                         required
                         value={templateAssunto}
                         onChange={(e) => setTemplateAssunto(e.target.value)}
-                        placeholder="Ex: [InfoTicket] Atualização no Chamado #{{ticket_id}}"
+                        placeholder="Ex: [TicketFlow] Atualização no Chamado #{{ticket_id}}"
                         className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                     </div>

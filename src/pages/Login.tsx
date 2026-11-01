@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Tela de Login v1.2.0
+ * TicketFlow - Tela de Login v1.2.1
  * Autenticação via Supabase Auth com Tema Claro Estrito
  */
 import React, { useState } from 'react';
@@ -77,7 +77,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
           <Headphones className="w-6 h-6" />
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          InfoTicket
+          TicketFlow
         </h1>
         <p className="mt-1.5 text-xs sm:text-sm text-slate-600">
           Acesse a plataforma de chamados e suporte B2B

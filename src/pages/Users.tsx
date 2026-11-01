@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Gestão de Equipe e Clientes (RBAC) v1.12.0
+ * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.12.1
  * Controle de Acesso Baseado em Papéis com Isolamento Estrito Multi-tenant (RLS)
  * Suporte a Arquitetura B2B2B (Organizações Clientes)
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
@@ -1208,6 +1208,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Digite a nova senha segura..."
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Confirmar Nova Senha *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirme a nova senha..."
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900"
                 />
               </div>

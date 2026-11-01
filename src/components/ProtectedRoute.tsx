@@ -90,7 +90,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, onNavi
           </h2>
 
           <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
-            O período gratuito de 7 dias de avaliação do InfoTicket para a empresa{' '}
+            O período gratuito de 7 dias de avaliação do TicketFlow para a empresa{' '}
             <strong className="text-slate-900">{company?.razao_social || 'sua empresa'}</strong>{' '}
             encerrou-se em <strong className="text-rose-600">{dataFormatada}</strong>.
           </p>
@@ -108,7 +108,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, onNavi
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => {
-                alert('Entre em contato com o comercial InfoTicket pelo e-mail contato@infoticket.com.br ou WhatsApp.');
+                alert('Entre em contato com o comercial TicketFlow pelo e-mail contato@ticketflow.com.br ou WhatsApp.');
               }}
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition-all"
             >

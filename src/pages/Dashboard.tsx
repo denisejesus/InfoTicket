@@ -156,7 +156,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
               {isCliente ? 'Central de Atendimento' : 'Painel Analítico de Atendimento'}
             </h1>
             <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
-              {currentCompany?.razao_social || 'InfoTicket'}
+              {currentCompany?.razao_social || 'TicketFlow'}
             </span>
           </div>
           <p className="text-sm text-slate-600 mt-1">
@@ -389,7 +389,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
               Olá, {profile?.nome?.split(' ')[0] || 'Cliente'}! Como podemos ajudar hoje?
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Bem-vindo ao canal oficial de suporte da <strong className="text-slate-800">{currentCompany?.razao_social || 'InfoTicket'}</strong>.
+              Bem-vindo ao canal oficial de suporte da <strong className="text-slate-800">{currentCompany?.razao_social || 'TicketFlow'}</strong>.
               Você pode abrir novos chamados técnicos para nossa equipe ou acompanhar o andamento das suas solicitações ativas.
             </p>
 

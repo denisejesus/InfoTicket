@@ -10,13 +10,15 @@ import {
   AlertCircle, 
   Loader2, 
   Building2,
-  Calendar
+  Calendar,
+  Phone
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
   const { user, profile, refreshTenantData, company } = useAuth();
 
   const [nome, setNome] = useState(profile?.nome || '');
+  const [whatsapp, setWhatsapp] = useState(profile?.whatsapp || '');
   const [recebeNotificacoes, setRecebeNotificacoes] = useState(profile?.recebe_notificacoes ?? true);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -33,6 +35,7 @@ export const ProfilePage: React.FC = () => {
     try {
       await dataService.updateProfile(user.id, {
         nome: nome.trim(),
+        whatsapp: whatsapp.trim() || null,
         recebe_notificacoes: recebeNotificacoes,
       });
 
@@ -163,6 +166,25 @@ export const ProfilePage: React.FC = () => {
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 O e-mail de acesso é gerenciado pelo Gestor da organização.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                WhatsApp
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900"
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Número para contato e notificações via WhatsApp.
               </p>
             </div>
 

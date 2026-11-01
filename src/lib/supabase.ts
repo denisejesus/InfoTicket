@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Cliente Supabase v1.0.4
+ * TicketFlow - Cliente Supabase v1.0.5
  * Inicializa a conexão com o Supabase utilizando as variáveis de ambiente.
  */
 import { createClient } from '@supabase/supabase-js';
@@ -9,7 +9,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
-    '❌ [InfoTicket] Variáveis de ambiente VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não encontradas no arquivo .env.'
+    '❌ [TicketFlow] Variáveis de ambiente VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não encontradas no arquivo .env.'
   );
 }
 

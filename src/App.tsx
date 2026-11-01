@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Aplicação Principal v1.7.0
+ * TicketFlow - Aplicação Principal v1.7.1
  * Gerenciamento de Rotas Públicas (/login, /register) e Rotas Protegidas com Painel Master Infocast (/admin), RBAC (/usuarios) e Detalhes (/tickets/:id)
  */
 import React, { useEffect, useState } from 'react';
@@ -205,7 +205,7 @@ function AppContent() {
           onNavigate={handleNavigateTab}
           isOpen={sidebarOpen}
           onCloseMobile={() => setSidebarOpen(false)}
-          empresaNome={company?.razao_social || 'InfoTicket Corporativo'}
+          empresaNome={company?.razao_social || 'TicketFlow Corporativo'}
         />
 
         {/* Área Direita (Header + Conteúdo Central Main) */}

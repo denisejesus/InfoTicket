@@ -267,7 +267,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess, onNavigateLogin }
           <Headphones className="w-6 h-6" />
         </div>
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-          Crie sua conta no InfoTicket
+          Crie sua conta no TicketFlow
         </h1>
         <p className="mt-2 text-sm text-slate-600">
           Inicie seu período de testes gratuito de 7 dias da plataforma SaaS B2B de chamados.

@@ -1,6 +1,6 @@
 /**
- * InfoTicket - Página "Meus Chamados" v1.9.0
- * Listagem com SLA Visual (Vencido, Atenção, No Prazo), abertura via NewTicket e navegação
+ * TicketFlow - Página "Meus Chamados" v1.10.0
+ * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência e navegação
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
 import React, { useEffect, useState } from 'react';
@@ -38,9 +38,21 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [statusFilter, setStatusFilter] = useState<string>('Aberto');
   const [myTicketsOnly, setMyTicketsOnly] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [viewMode, setViewModeState] = useState<'table' | 'kanban'>(() => {
+    const saved = localStorage.getItem('ticketflow_view_preference');
+    return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
+  });
+
+  const setViewMode = (mode: 'table' | 'kanban') => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem('ticketflow_view_preference', mode);
+    } catch (e) {
+      console.warn('Erro ao salvar preferência no localStorage:', e);
+    }
+  };
 
   // Modal Novo Chamado
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -142,7 +154,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
               }`}
             >
               <Table className="w-3.5 h-3.5" />
-              <span>Tabela</span>
+              <span>Visão em Lista</span>
             </button>
             <button
               type="button"
@@ -154,7 +166,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Kanban</span>
+              <span>Visão em Quadros</span>
             </button>
           </div>
 
@@ -180,14 +192,14 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-3">
         {/* Linha 1: Abas de Status Rápidas & Toggle 'Meus Chamados' */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          {/* Quick Tabs de Status */}
+          {/* Quick Tabs de Status: Abertos, Em Atendimento, Aguardando Cliente, Fechados e Todos */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             {[
-              { label: 'Todos', value: 'todos' },
               { label: 'Abertos', value: 'Aberto' },
               { label: 'Em Atendimento', value: 'Em Andamento' },
               { label: 'Aguardando Cliente', value: 'Aguardando Cliente' },
               { label: 'Fechados', value: 'Fechado' },
+              { label: 'Todos', value: 'todos' },
             ].map((tab) => {
               const active = statusFilter === tab.value;
               return (
@@ -378,11 +390,6 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
                         <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5" title={t.descricao}>
                           {t.descricao}
                         </div>
-                        {t.resumo_conclusao && (
-                          <div className="mt-1 text-[10px] text-slate-600 bg-slate-100 p-1.5 rounded border border-slate-200">
-                            <strong className="text-slate-800">Conclusão:</strong> {t.resumo_conclusao}
-                          </div>
-                        )}
                       </td>
 
                       {/* Solicitante / Organização */}

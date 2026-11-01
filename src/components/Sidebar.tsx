@@ -25,7 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   isOpen,
   onCloseMobile,
-  empresaNome = 'InfoTicket',
+  empresaNome = 'TicketFlow',
 }) => {
   const { profile } = useAuth();
   const isSuperAdmin = profile?.role === 'Super Admin';
@@ -75,11 +75,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Header do Logo */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200">
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white font-bold text-sm shadow-sm">
-            IT
+            TF
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-slate-900 tracking-tight">InfoTicket</span>
+              <span className="text-base font-bold text-slate-900 tracking-tight">TicketFlow</span>
               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded">
                 SaaS B2B
               </span>
@@ -170,10 +170,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span className="flex items-center gap-1.5 font-medium">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
-              InfoTicket Core
+              TicketFlow Core
             </span>
             <span className="px-1.5 py-0.2 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.10.0
+              v1.10.1
             </span>
           </div>
         </div>
