@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.18.4
+ * InfoTicket - Send Notification Edge Function v1.18.5
  * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
  * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
  * Renderiza templates HTML profissionais mapeados da tabela `communication_templates`
@@ -483,7 +483,25 @@ serve(async (req: Request) => {
           ? [clienteEmail]
           : [];
 
-        recipientEmails = Array.from(new Set([...managerEmails, ...opList, ...clList]));
+      } else if (normalizedEventType === "new_ticket") {
+        // Envia para os gestores/gerentes da empresa e para o cliente que abriu
+        const { data: managers } = await supabase
+          .from("profiles")
+          .select("email, role, recebe_notificacoes")
+          .eq("company_id", ticket.company_id)
+          .in("role", ["Gerente", "Gestor"]);
+
+        const managerEmails = (managers || [])
+          .filter((m: any) => {
+            if (m.role === "Gerente") return true;
+            if (m.role === "Gestor") return m.recebe_notificacoes !== false;
+            return false;
+          })
+          .map((m: any) => m.email)
+          .filter(Boolean);
+
+        const clList = (clienteEmail && ticket.cliente?.recebe_notificacoes !== false) ? [clienteEmail] : [];
+        recipientEmails = Array.from(new Set([...managerEmails, ...clList]));
 
       } else {
         const clList = (clienteEmail && ticket.cliente?.recebe_notificacoes !== false) ? [clienteEmail] : [];
