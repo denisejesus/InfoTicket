@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.10.0
+ * TicketFlow - Página "Meus Chamados" v1.10.1
  * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência e navegação
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
@@ -38,7 +38,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('Aberto');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [myTicketsOnly, setMyTicketsOnly] = useState<boolean>(false);
   const [viewMode, setViewModeState] = useState<'table' | 'kanban'>(() => {
     const saved = localStorage.getItem('ticketflow_view_preference');
@@ -192,14 +192,14 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-3">
         {/* Linha 1: Abas de Status Rápidas & Toggle 'Meus Chamados' */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          {/* Quick Tabs de Status: Abertos, Em Atendimento, Aguardando Cliente, Fechados e Todos */}
+          {/* Quick Tabs de Status: Todos, Abertos, Em Atendimento, Aguardando Cliente e Fechados */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             {[
+              { label: 'Todos', value: 'todos' },
               { label: 'Abertos', value: 'Aberto' },
               { label: 'Em Atendimento', value: 'Em Andamento' },
               { label: 'Aguardando Cliente', value: 'Aguardando Cliente' },
               { label: 'Fechados', value: 'Fechado' },
-              { label: 'Todos', value: 'todos' },
             ].map((tab) => {
               const active = statusFilter === tab.value;
               return (

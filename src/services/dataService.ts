@@ -99,11 +99,12 @@ export const dataService = {
   /**
    * Invoca a Edge Function reset-user-password para redefinir senha no Supabase Auth
    */
-  async resetUserPassword(userId: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+  async resetUserPassword(userId: string, newPassword: string, email?: string): Promise<{ success: boolean; message: string }> {
     try {
       const response = await supabase.functions.invoke('reset-user-password', {
         body: {
           user_id: userId,
+          email: email?.trim().toLowerCase(),
           new_password: newPassword,
         },
       });
@@ -122,6 +123,7 @@ export const dataService = {
           },
           body: JSON.stringify({
             user_id: userId,
+            email: email?.trim().toLowerCase(),
             new_password: newPassword,
           }),
         });

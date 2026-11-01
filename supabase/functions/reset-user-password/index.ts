@@ -2,9 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * InfoTicket - Reset User Password Edge Function v1.15.0
+ * TicketFlow - Reset User Password Edge Function v1.16.0
  * Força a alteração de senha de um usuário no Supabase Auth via Service Role
- * Chamado pelo Gestor/Super Admin na gestão de usuários
+ * Resolve o usuário pelo ID ou pelo e-mail caso os IDs de `profiles` e `auth.users` divirjam
  */
 
 const corsHeaders = {
@@ -15,6 +15,7 @@ const corsHeaders = {
 
 interface ResetPasswordPayload {
   user_id: string;
+  email?: string;
   new_password: string;
 }
 
@@ -33,7 +34,7 @@ serve(async (req: Request) => {
     }
 
     const body: ResetPasswordPayload = await req.json();
-    const { user_id, new_password } = body;
+    const { user_id, email, new_password } = body;
 
     if (!user_id || !new_password) {
       return new Response(
@@ -76,26 +77,107 @@ serve(async (req: Request) => {
       },
     });
 
-    console.log(`🔐 [Reset Password] Redefinindo senha para o usuário ID: ${user_id}`);
+    console.log(`🔐 [Reset Password] Solicitada redefinição para user_id: ${user_id}, email: ${email || 'não informado'}`);
 
-    // Executa a alteração no Auth admin
-    const { data: userData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    // 1. Tentar localizar o usuário diretamente em auth.users
+    let targetAuthUserId: string | null = null;
+    let targetEmail: string | null = email?.trim().toLowerCase() || null;
+
+    // Se o email não veio no body, busca no profile correspondente ao user_id
+    if (!targetEmail) {
+      const { data: profileData } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .eq("id", user_id)
+        .single();
+
+      if (profileData?.email) {
+        targetEmail = profileData.email.trim().toLowerCase();
+      }
+    }
+
+    // Tenta atualizar diretamente pelo user_id
+    const { data: directData, error: directError } = await supabaseAdmin.auth.admin.updateUserById(
       user_id,
       { password: new_password }
     );
 
-    if (updateError) {
-      console.error("❌ Erro ao atualizar senha no Supabase Auth:", updateError.message);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: `Falha ao redefinir senha no Auth: ${updateError.message}`,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!directError && directData?.user) {
+      targetAuthUserId = directData.user.id;
+      console.log(`✅ [Reset Password] Senha atualizada com sucesso diretamente pelo ID: ${targetAuthUserId}`);
+    } else {
+      console.warn(`⚠️ Tentativa direta por user_id ${user_id} retornou: ${directError?.message}. Tentando busca por e-mail...`);
+
+      // Se falhou por "User not found" ou divergência de ID, busca em auth.users pelo e-mail
+      if (targetEmail) {
+        // Lista usuários do Auth para encontrar o ID correspondente ao e-mail
+        const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+
+        if (!listError && listData?.users) {
+          const authUser = listData.users.find(
+            (u) => u.email?.trim().toLowerCase() === targetEmail
+          );
+
+          if (authUser) {
+            targetAuthUserId = authUser.id;
+            console.log(`🔍 [Reset Password] Usuário localizado no Auth pelo e-mail ${targetEmail}: ID ${targetAuthUserId}`);
+            
+            const { error: fallbackUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+              targetAuthUserId,
+              { password: new_password }
+            );
+
+            if (fallbackUpdateError) {
+              console.error("❌ Erro ao atualizar senha via Auth ID:", fallbackUpdateError.message);
+              return new Response(
+                JSON.stringify({
+                  success: false,
+                  message: `Falha ao redefinir senha no Auth: ${fallbackUpdateError.message}`,
+                }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          } else {
+            // Usuário existe na tabela profiles mas ainda não foi criado em auth.users: cria diretamente com a nova senha
+            console.log(`➕ [Reset Password] Usuário ${targetEmail} não encontrado no Auth. Criando usuário no Supabase Auth...`);
+            const { data: newAuthData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+              email: targetEmail,
+              password: new_password,
+              email_confirm: true,
+            });
+
+            if (createError) {
+              console.error("❌ Erro ao criar usuário no Auth:", createError.message);
+              return new Response(
+                JSON.stringify({
+                  success: false,
+                  message: `Falha ao criar credencial de autenticação: ${createError.message}`,
+                }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            targetAuthUserId = newAuthData.user?.id || null;
+            console.log(`✅ [Reset Password] Usuário criado no Auth com a nova senha: ID ${targetAuthUserId}`);
+          }
+        }
+      }
+
+      if (!targetAuthUserId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: `Falha ao redefinir senha no Auth: ${directError?.message || 'User not found'}`,
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
-    // Atualiza campo atualizado_em no profile
+    // 2. Atualiza timestamp e, se necessário, sincroniza na tabela profiles
     try {
       await supabaseAdmin
         .from("profiles")
@@ -110,8 +192,8 @@ serve(async (req: Request) => {
         success: true,
         message: "Senha redefinida com sucesso pelo administrador!",
         user: {
-          id: userData.user?.id,
-          email: userData.user?.email,
+          id: targetAuthUserId,
+          email: targetEmail,
         },
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

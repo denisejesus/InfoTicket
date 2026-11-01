@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.12.1
+ * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.12.2
  * Controle de Acesso Baseado em Papéis com Isolamento Estrito Multi-tenant (RLS)
  * Suporte a Arquitetura B2B2B (Organizações Clientes)
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
@@ -306,7 +306,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     setResetSuccess(null);
 
     try {
-      const result = await dataService.resetUserPassword(resetPasswordProfile.id, newPassword);
+      const result = await dataService.resetUserPassword(
+        resetPasswordProfile.id, 
+        newPassword,
+        resetPasswordProfile.email
+      );
 
       if (result.success) {
         setResetSuccess(`Senha alterada com sucesso para ${resetPasswordProfile.nome || resetPasswordProfile.email}!`);
