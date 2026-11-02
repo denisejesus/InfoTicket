@@ -1,7 +1,10 @@
 /**
- * InfoTicket - Script de Limpeza de Dados de Teste v1.0.0
- * Remove com segurança todos os dados operacionais e de empresas de teste no Supabase,
- * preservando estritamente a empresa Master "Infocast" e o perfil master de "denise@infocast-web.com.br".
+ * InfoTicket - Script de Limpeza de Dados de Teste v1.1.0
+ * Remove com segurança todos os dados operacionais e de empresas de teste no Supabase:
+ * - Remove todos os chamados de teste (tickets, ticket_messages, ticket_attachments) da Infocast
+ * - Remove a organização cliente de teste "Casa Eloy"
+ * - Remove todos os perfis e usuários do Auth, preservando estritamente "denise@infocast-web.com.br"
+ * - Preserva a empresa Master "Infocast" e suas configurações (SMTP, Chatwoot/Chat4u)
  * 
  * Execução: npm run db:clean
  */
@@ -52,7 +55,7 @@ const MASTER_COMPANY_NAME = 'Infocast';
 
 async function cleanTestData() {
   console.log('=====================================================');
-  console.log('🧹 InfoTicket - Iniciando Limpeza de Dados de Teste');
+  console.log('🧹 InfoTicket - Iniciando Limpeza de Dados de Teste v1.1.0');
   console.log('=====================================================');
 
   try {
@@ -78,92 +81,54 @@ async function cleanTestData() {
       .select('id, email, nome')
       .eq('email', MASTER_EMAIL);
 
-    console.log(`👤 Perfil Master localizado: ${masterProfiles?.length || 0} conta(s) com e-mail ${MASTER_EMAIL}`);
+    if (!masterProfiles || masterProfiles.length === 0) {
+      throw new Error(`Perfil Master "${MASTER_EMAIL}" não encontrado! Abortando para evitar perda de acesso.`);
+    }
 
-    // b & c) Excluir dados operacionais que NÃO pertençam à Infocast respeitando a ordem de FKs
-    console.log('\n--- Removendo registros operacionais de teste (company_id != Master) ---');
+    const masterUserId = masterProfiles[0].id;
+    console.log(`👤 Perfil Master localizado e protegido: ${masterProfiles[0].nome} (${MASTER_EMAIL}, ID: ${masterUserId})`);
 
-    // 1. audit_logs
-    process.stdout.write('1. Excluindo audit_logs de teste... ');
-    const { count: auditCount, error: auditErr } = await supabase
-      .from('audit_logs')
-      .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
-    if (auditErr) console.warn(`Aviso em audit_logs: ${auditErr.message}`);
-    else console.log(`Removidos: ${auditCount ?? 0}`);
-
-    // 2. ticket_attachments
-    process.stdout.write('2. Excluindo ticket_attachments de teste... ');
+    // 1. Remover anexos e mensagens dos tickets
+    console.log('\n--- 1. Removendo mensagens e anexos dos chamados de teste ---');
     const { count: attachCount, error: attachErr } = await supabase
       .from('ticket_attachments')
       .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
+      .neq('id', '00000000-0000-0000-0000-000000000000');
     if (attachErr) console.warn(`Aviso em ticket_attachments: ${attachErr.message}`);
-    else console.log(`Removidos: ${attachCount ?? 0}`);
+    else console.log(`✅ Anexos removidos: ${attachCount ?? 0}`);
 
-    // 3. ticket_messages
-    process.stdout.write('3. Excluindo ticket_messages de teste... ');
     const { count: msgCount, error: msgErr } = await supabase
       .from('ticket_messages')
       .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
+      .neq('id', '00000000-0000-0000-0000-000000000000');
     if (msgErr) console.warn(`Aviso em ticket_messages: ${msgErr.message}`);
-    else console.log(`Removidos: ${msgCount ?? 0}`);
+    else console.log(`✅ Mensagens de chamados removidas: ${msgCount ?? 0}`);
 
-    // 4. tickets
-    process.stdout.write('4. Excluindo tickets de teste... ');
+    // 2. Remover todos os tickets de teste
+    console.log('\n--- 2. Removendo todos os chamados de teste ---');
     const { count: ticketCount, error: ticketErr } = await supabase
       .from('tickets')
       .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
+      .neq('id', '00000000-0000-0000-0000-000000000000');
     if (ticketErr) console.warn(`Aviso em tickets: ${ticketErr.message}`);
-    else console.log(`Removidos: ${ticketCount ?? 0}`);
+    else console.log(`✅ Chamados de teste removidos: ${ticketCount ?? 0}`);
 
-    // 5. macros (se existir)
-    process.stdout.write('5. Excluindo macros de teste... ');
-    const { count: macroCount, error: macroErr } = await supabase
-      .from('macros')
-      .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
-    if (macroErr) console.warn(`Aviso em macros: ${macroErr.message}`);
-    else console.log(`Removidos: ${macroCount ?? 0}`);
-
-    // 6. chatwoot_channels
-    process.stdout.write('6. Excluindo chatwoot_channels de teste... ');
-    const { count: channelCount, error: channelErr } = await supabase
-      .from('chatwoot_channels')
-      .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
-    if (channelErr) console.warn(`Aviso em chatwoot_channels: ${channelErr.message}`);
-    else console.log(`Removidos: ${channelCount ?? 0}`);
-
-    // 7. communication_templates
-    process.stdout.write('7. Excluindo communication_templates de empresas de teste... ');
-    const { count: templateCount, error: templateErr } = await supabase
-      .from('communication_templates')
-      .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
-    if (templateErr) console.warn(`Aviso em communication_templates: ${templateErr.message}`);
-    else console.log(`Removidos: ${templateCount ?? 0}`);
-
-    // 8. client_organizations
-    process.stdout.write('8. Excluindo client_organizations de teste... ');
+    // 3. Remover organização cliente "Casa Eloy"
+    console.log('\n--- 3. Removendo organização cliente de teste (Casa Eloy) ---');
     const { count: orgCount, error: orgErr } = await supabase
       .from('client_organizations')
       .delete({ count: 'exact' })
-      .neq('company_id', masterCompanyId);
+      .ilike('nome', '%Casa Eloy%');
     if (orgErr) console.warn(`Aviso em client_organizations: ${orgErr.message}`);
-    else console.log(`Removidos: ${orgCount ?? 0}`);
+    else console.log(`✅ Organizações de teste removidas: ${orgCount ?? 0}`);
 
-    // d) Excluir perfis de teste da tabela profiles
-    console.log('\n--- Removendo perfis de usuários de teste ---');
-    console.log(`Preservando estritamente: ${MASTER_EMAIL} e usuários vinculados à empresa Master.`);
-
+    // 4. Remover perfis de teste da tabela profiles (exceto denise@infocast-web.com.br)
+    console.log('\n--- 4. Removendo perfis de usuários de teste ---');
+    console.log(`Preservando estritamente: ${MASTER_EMAIL}`);
     const { count: profCount, error: profErr } = await supabase
       .from('profiles')
       .delete({ count: 'exact' })
-      .neq('email', MASTER_EMAIL)
-      .neq('company_id', masterCompanyId);
+      .neq('email', MASTER_EMAIL);
 
     if (profErr) {
       console.error(`❌ Erro ao excluir perfis de teste: ${profErr.message}`);
@@ -171,8 +136,29 @@ async function cleanTestData() {
       console.log(`✅ Perfis de teste removidos: ${profCount ?? 0}`);
     }
 
-    // e) Excluir empresas que não sejam "Infocast"
-    console.log('\n--- Removendo empresas de teste ---');
+    // 5. Remover usuários do Supabase Auth (auth.users) exceto denise@infocast-web.com.br
+    console.log('\n--- 5. Removendo contas de teste do Supabase Auth ---');
+    const { data: authList, error: authListErr } = await supabase.auth.admin.listUsers();
+    if (authListErr) {
+      console.warn(`Aviso ao listar auth.users: ${authListErr.message}`);
+    } else if (authList && authList.users) {
+      let authDeletedCount = 0;
+      for (const authUser of authList.users) {
+        if (authUser.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase()) {
+          console.log(`Removendo auth user: ${authUser.email} (${authUser.id})...`);
+          const { error: delErr } = await supabase.auth.admin.deleteUser(authUser.id);
+          if (delErr) {
+            console.warn(`Aviso ao excluir auth user ${authUser.email}: ${delErr.message}`);
+          } else {
+            authDeletedCount++;
+          }
+        }
+      }
+      console.log(`✅ Usuários removidos do Supabase Auth: ${authDeletedCount}`);
+    }
+
+    // 6. Remover empresas que não sejam "Infocast"
+    console.log('\n--- 6. Removendo eventuais outras empresas de teste ---');
     const { count: compDeleteCount, error: compDelErr } = await supabase
       .from('companies')
       .delete({ count: 'exact' })
@@ -185,7 +171,8 @@ async function cleanTestData() {
     }
 
     console.log('\n=====================================================');
-    console.log('🎉 Dados de teste removidos com sucesso. Infocast mantida.');
+    console.log('🎉 Limpeza concluída com sucesso!');
+    console.log(`Preservada: Empresa Infocast e perfil ${MASTER_EMAIL}`);
     console.log('=====================================================');
 
   } catch (error: any) {
@@ -195,3 +182,4 @@ async function cleanTestData() {
 }
 
 cleanTestData();
+

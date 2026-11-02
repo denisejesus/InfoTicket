@@ -138,7 +138,7 @@ serve(async (req: Request) => {
     let finalCorpo = "";
     let companyName = "InfoTicket";
 
-    const appUrl = Deno.env.get("PUBLIC_APP_URL") || "https://infoticket.app";
+    const appUrl = (payload.app_url || Deno.env.get("PUBLIC_APP_URL") || "https://dev2.infocast.com.br/ticketflow").replace(/\/$/, "");
 
     // -------------------------------------------------------------
     // CASO 1: BOAS-VINDAS / CRIAÇÃO DE USUÁRIO (welcome_email)

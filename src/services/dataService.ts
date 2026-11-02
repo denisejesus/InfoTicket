@@ -56,6 +56,7 @@ export const dataService = {
           user_id: data.id,
           recipient_email: profileData.email,
           recipient_name: profileData.nome,
+          app_url: typeof window !== 'undefined' ? `${window.location.origin}/ticketflow` : 'https://dev2.infocast.com.br/ticketflow',
         },
       });
     } catch (notifyErr) {

@@ -24,23 +24,38 @@ function AppContent() {
   const { user, profile, company, signOut } = useAuth();
   const isSuperAdmin = profile?.role === 'Super Admin';
 
-  // Extrai ID do ticket caso a URL seja /tickets/:id
+  // Helper para normalizar o caminho removendo a base /ticketflow se presente
+  const getRelativePath = (fullPath: string) => {
+    let p = fullPath;
+    if (p.startsWith('/ticketflow')) {
+      p = p.substring('/ticketflow'.length);
+    }
+    return p.startsWith('/') ? p : '/' + p;
+  };
+
+  // Extrai ID do ticket caso a URL seja /tickets/:id ou /ticketflow/tickets/:id
   const getTicketIdFromPath = (path: string) => {
-    const match = path.match(/^\/tickets\/([a-zA-Z0-9-]+)$/);
+    const rel = getRelativePath(path);
+    const match = rel.match(/^\/tickets\/([a-zA-Z0-9-]+)$/);
     return match ? match[1] : null;
+  };
+
+  const getBasePath = () => {
+    return window.location.pathname.startsWith('/ticketflow') ? '/ticketflow' : '';
   };
 
   // Controle de rota pública vs privada com base na URL
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
-    const path = window.location.pathname;
-    if (path === '/register') return 'register';
-    if (path === '/login') return 'login';
-    if (path === '/admin') return 'admin';
+    const rel = getRelativePath(window.location.pathname);
+    if (rel === '/register') return 'register';
+    if (rel === '/login') return 'login';
+    if (rel === '/admin') return 'admin';
     return 'app';
   });
 
   const [currentTab, setCurrentTab] = useState<NavItem>(() => {
-    return window.location.pathname === '/admin' ? 'administracao-global' : 'painel';
+    const rel = getRelativePath(window.location.pathname);
+    return rel === '/admin' ? 'administracao-global' : 'painel';
   });
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(() => {
@@ -52,8 +67,9 @@ function AppContent() {
   // Sincroniza histórico do navegador com navegação de rotas e rotas dinâmicas
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      const ticketId = getTicketIdFromPath(path);
+      const fullPath = window.location.pathname;
+      const rel = getRelativePath(fullPath);
+      const ticketId = getTicketIdFromPath(fullPath);
 
       if (ticketId) {
         setCurrentRoute('app');
@@ -64,17 +80,17 @@ function AppContent() {
 
       setSelectedTicketId(null);
 
-      if (path === '/register') {
+      if (rel === '/register') {
         setCurrentRoute('register');
-      } else if (path === '/login') {
+      } else if (rel === '/login') {
         setCurrentRoute('login');
-      } else if (path === '/admin') {
+      } else if (rel === '/admin') {
         setCurrentRoute('admin');
         setCurrentTab('administracao-global');
-      } else if (path === '/usuarios') {
+      } else if (rel === '/usuarios') {
         setCurrentRoute('app');
         setCurrentTab('usuarios');
-      } else if (path === '/settings' || path === '/configuracoes') {
+      } else if (rel === '/settings' || rel === '/configuracoes') {
         setCurrentRoute('app');
         setCurrentTab('configuracoes');
       } else {
@@ -88,10 +104,11 @@ function AppContent() {
   const navigateTo = (route: AppRoute) => {
     setCurrentRoute(route);
     setSelectedTicketId(null);
-    let newPath = '/';
-    if (route === 'register') newPath = '/register';
-    if (route === 'login') newPath = '/login';
-    if (route === 'admin') newPath = '/admin';
+    const base = getBasePath();
+    let newPath = base ? `${base}/` : '/';
+    if (route === 'register') newPath = `${base}/register`;
+    if (route === 'login') newPath = `${base}/login`;
+    if (route === 'admin') newPath = `${base}/admin`;
 
     if (window.location.pathname !== newPath) {
       window.history.pushState({}, '', newPath);
@@ -101,16 +118,18 @@ function AppContent() {
   const handleNavigateTab = (tab: NavItem) => {
     setCurrentTab(tab);
     setSelectedTicketId(null);
+    const base = getBasePath();
     if (tab === 'administracao-global') {
       navigateTo('admin');
     } else {
       navigateTo('app');
-      if (tab === 'usuarios' && window.location.pathname !== '/usuarios') {
-        window.history.pushState({}, '', '/usuarios');
-      } else if (tab === 'configuracoes' && window.location.pathname !== '/settings') {
-        window.history.pushState({}, '', '/settings');
-      } else if (tab !== 'usuarios' && tab !== 'configuracoes' && window.location.pathname !== '/') {
-        window.history.pushState({}, '', '/');
+      const rel = getRelativePath(window.location.pathname);
+      if (tab === 'usuarios' && rel !== '/usuarios') {
+        window.history.pushState({}, '', `${base}/usuarios`);
+      } else if (tab === 'configuracoes' && rel !== '/settings') {
+        window.history.pushState({}, '', `${base}/settings`);
+      } else if (tab !== 'usuarios' && tab !== 'configuracoes' && rel !== '/' && rel !== '') {
+        window.history.pushState({}, '', base ? `${base}/` : '/');
       }
     }
   };
@@ -119,7 +138,8 @@ function AppContent() {
     setSelectedTicketId(ticketId);
     setCurrentTab('meus-chamados');
     setCurrentRoute('app');
-    const newPath = `/tickets/${ticketId}`;
+    const base = getBasePath();
+    const newPath = `${base}/tickets/${ticketId}`;
     if (window.location.pathname !== newPath) {
       window.history.pushState({}, '', newPath);
     }
@@ -128,8 +148,10 @@ function AppContent() {
   const handleBackToTickets = () => {
     setSelectedTicketId(null);
     setCurrentTab('meus-chamados');
-    if (window.location.pathname !== '/') {
-      window.history.pushState({}, '', '/');
+    const base = getBasePath();
+    const target = base ? `${base}/` : '/';
+    if (window.location.pathname !== target) {
+      window.history.pushState({}, '', target);
     }
   };
 
