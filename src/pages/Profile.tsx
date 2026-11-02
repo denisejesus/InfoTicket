@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+/**
+ * TicketFlow - Meu Perfil v1.1.0
+ * Gestão de Dados Pessoais, WhatsApp e Notificações com persistência RLS
+ */
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { 
@@ -24,27 +28,45 @@ export const ProfilePage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Sincroniza os campos do formulário sempre que o perfil for carregado ou atualizado pelo AuthContext
+  useEffect(() => {
+    if (profile) {
+      setNome(profile.nome || '');
+      setWhatsapp(profile.whatsapp || '');
+      setRecebeNotificacoes(profile.recebe_notificacoes ?? true);
+    }
+  }, [profile]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    const targetUserId = user?.id || profile?.id;
+    if (!targetUserId) {
+      setErrorMessage('Identificação do usuário não encontrada na sessão.');
+      return;
+    }
+
+    if (!nome.trim()) {
+      setErrorMessage('Por favor, informe seu nome completo.');
+      return;
+    }
 
     setLoading(true);
     setSuccessMessage(null);
     setErrorMessage(null);
 
     try {
-      await dataService.updateProfile(user.id, {
+      await dataService.updateProfile(targetUserId, {
         nome: nome.trim(),
         whatsapp: whatsapp.trim() || null,
         recebe_notificacoes: recebeNotificacoes,
       });
 
       await refreshTenantData();
-      setSuccessMessage('Perfil atualizado com sucesso!');
-      setTimeout(() => setSuccessMessage(null), 4000);
+      setSuccessMessage('Alterações salvas com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
       console.error('Erro ao atualizar perfil:', err);
-      setErrorMessage(err.message || 'Falha ao atualizar dados do perfil.');
+      setErrorMessage(err.message || 'Falha ao atualizar dados do perfil. Tente novamente.');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.10.1
+ * TicketFlow - Página "Meus Chamados" v1.11.0
  * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência e navegação
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
@@ -71,13 +71,20 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
     }
   };
 
-  // Sincronizar busca global via URL (?search=termo)
+  // Sincronizar busca global e abertura de chamado via URL (?search=termo, ?new=true)
   useEffect(() => {
     const syncSearchFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
       const searchParam = params.get('search');
       if (searchParam !== null) {
         setSearchTerm(searchParam);
+      }
+      if (params.get('new') === 'true') {
+        setIsNewTicketOpen(true);
+        // Limpa parâmetro da URL sem recarregar a tela
+        params.delete('new');
+        const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, '', newUrl);
       }
     };
 
@@ -136,8 +143,8 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Meus Chamados</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Gestão operacional de tickets em tempo real para a empresa{' '}
-            <strong className="text-slate-800">{currentCompany?.razao_social || 'Multi-tenant'}</strong>.
+            Portal de Atendimento ao Cliente • Acompanhamento de chamados em tempo real da{' '}
+            <strong className="text-slate-800">{currentCompany?.razao_social || 'sua organização'}</strong>.
           </p>
         </div>
 

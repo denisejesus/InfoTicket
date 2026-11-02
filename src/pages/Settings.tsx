@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Configurações da Empresa v1.18.2
+ * TicketFlow - Configurações da Empresa v1.19.0
  * Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
  * Interface Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
@@ -36,12 +36,19 @@ import { dataService } from '../services/dataService';
 import { CommunicationTemplate, ChatwootChannel } from '../types/database';
 
 export const SettingsPage: React.FC = () => {
-  const { profile, company } = useAuth();
+  const { profile, company, loading: authLoading } = useAuth();
 
   // Controle de permissão de acesso à tela: Apenas Gestor, Gerente ou Super Admin
-  const isAuthorized = profile?.role === 'Gestor' || profile?.role === 'Gerente' || profile?.role === 'Super Admin';
+  const normalizedRole = (profile?.role || '').trim().toLowerCase();
+  const isAuthorized = 
+    normalizedRole === 'gestor' || 
+    normalizedRole === 'gerente' || 
+    normalizedRole === 'super admin' ||
+    normalizedRole === 'super_admin' ||
+    normalizedRole === 'admin';
+
   // Regra de Negócio Crítica: Apenas Super Admin (Master) pode editar e testar os dados do Chat4u
-  const isSuperAdmin = profile?.role === 'Super Admin';
+  const isSuperAdmin = normalizedRole === 'super admin' || normalizedRole === 'super_admin';
 
   const [activeTab, setActiveTab] = useState<'smtp' | 'integracoes' | 'templates'>('smtp');
 
@@ -428,6 +435,16 @@ export const SettingsPage: React.FC = () => {
     { tag: '{{resumo}}', desc: 'Resumo da solução informado no encerramento' },
     { tag: '{{portal_url}}', desc: 'Endereço principal de acesso do portal' },
   ];
+
+  // Se os dados de autenticação e perfil ainda estiverem carregando, exibe spinner
+  if (authLoading || !profile) {
+    return (
+      <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+        <span className="text-xs font-medium">Validando permissões de acesso...</span>
+      </div>
+    );
+  }
 
   // Se o usuário não tiver privilégio de Gestor, Gerente ou Super Admin, bloqueia a tela
   if (!isAuthorized) {

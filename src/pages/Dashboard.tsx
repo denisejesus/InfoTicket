@@ -1,7 +1,7 @@
 /**
- * InfoTicket - Painel Analítico & Dashboard v1.11.3
- * Métricas em tempo real com dados reais do Supabase (Zero Mocks),
- * SLA Vencidos, Média de Satisfação CSAT, Distribuição Visual por Status e Controle RBAC por Role
+ * InfoTicket - Painel Analítico & Dashboard v1.12.0
+ * Visão Especializada para Clientes (Boas-vindas, Atalhos Diretos e Zero Jargão Técnico)
+ * Métricas em tempo real com dados reais do Supabase (Zero Mocks) para equipe de Gestão/Operação
  * Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
 import React, { useEffect, useState } from 'react';
@@ -21,7 +21,9 @@ import {
   ShieldCheck, 
   User, 
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Search,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
@@ -146,6 +148,188 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
     Fechado: { label: 'Fechado', color: 'bg-slate-400', bg: 'bg-slate-100', text: 'text-slate-700' },
   };
 
+  // Visão Exclusiva e Simplificada para o Perfil "Cliente"
+  if (isCliente) {
+    return (
+      <div className="space-y-6 font-sans antialiased text-slate-900">
+        {/* Cabeçalho Amigável do Cliente */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                Portal de Atendimento ao Cliente
+              </h1>
+              <span className="px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
+                {currentCompany?.razao_social || 'TicketFlow'}
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 mt-1">
+              Acompanhamento de chamados em tempo real
+            </p>
+          </div>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-sm transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>Atualizar</span>
+          </button>
+        </div>
+
+        {/* Mensagem de Boas-vindas e Ações Rápidas em Destaque */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-sm">
+          <div className="max-w-2xl space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Canal Oficial de Atendimento</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Olá, {profile?.nome?.split(' ')[0] || 'Cliente'}! Como podemos ajudar você hoje?
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Bem-vindo ao portal de suporte da <strong className="text-slate-800">{currentCompany?.razao_social || 'sua empresa'}</strong>. 
+              Aqui você pode registrar novas solicitações ou acompanhar em tempo real todas as respostas e atualizações dos seus chamados.
+            </p>
+          </div>
+
+          {/* Botões Grandes de Atalho */}
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                params.set('new', 'true');
+                window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+                onNavigateTab?.('meus-chamados');
+              }}
+              className="flex items-center gap-4 p-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-md shadow-blue-500/20 transition-all hover:scale-[1.01] group text-left"
+            >
+              <div className="p-3.5 bg-white/10 rounded-xl group-hover:bg-white/20 transition-colors">
+                <Plus className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <span className="block text-base font-bold">Abrir Novo Chamado</span>
+                <span className="block text-xs text-blue-100 mt-0.5">Criar uma nova solicitação para o suporte</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => onNavigateTab?.('meus-chamados')}
+              className="flex items-center gap-4 p-5 bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm transition-all hover:scale-[1.01] group text-left"
+            >
+              <div className="p-3.5 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
+                <TicketIcon className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <span className="block text-base font-bold">Consultar Meus Chamados</span>
+                <span className="block text-xs text-slate-500 mt-0.5">Visualizar histórico e andamento dos tickets</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Tabela Resumida: Chamados do Cliente */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Meus Chamados Recentes
+              </h2>
+              <p className="text-xs text-slate-500">
+                Acompanhe o andamento dos seus últimos chamados registrados
+              </p>
+            </div>
+            {onNavigateTab && (
+              <button
+                onClick={() => onNavigateTab('meus-chamados')}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
+              >
+                <span>Ver todos os chamados</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="p-10 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                <span>Carregando seus chamados...</span>
+              </div>
+            ) : tickets.length === 0 ? (
+              <div className="p-10 text-center text-xs text-slate-500">
+                <TicketIcon className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                <p className="font-semibold text-slate-700">Você ainda não possui chamados abertos.</p>
+                <p className="mt-1 text-slate-400">
+                  Clique em "Abrir Novo Chamado" para registrar sua primeira solicitação.
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50/80 text-slate-600 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="px-5 py-3">Código</th>
+                    <th className="px-5 py-3">Assunto</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Data</th>
+                    <th className="px-5 py-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                  {tickets.slice(0, 5).map((t) => {
+                    const cfg = statusConfig[t.status] || { bg: 'bg-slate-100', text: 'text-slate-700' };
+
+                    return (
+                      <tr 
+                        key={t.id} 
+                        onClick={() => onNavigateTab?.('meus-chamados')}
+                        className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                      >
+                        <td className="px-5 py-3.5 font-mono text-blue-600 font-bold whitespace-nowrap">
+                          #{t.id.substring(0, 8)}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-900 font-bold group-hover:text-blue-700 max-w-xs truncate">
+                          {t.assunto}
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.bg} ${cfg.text}`}>
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-400 whitespace-nowrap">
+                          {new Date(t.criado_em).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigateTab?.('meus-chamados');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
+                          >
+                            <span>Acompanhar</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Visão Analítica para Gestor, Gerente, Operador e Super Admin
   return (
     <div className="space-y-6 font-sans antialiased text-slate-900">
       {/* Topo do Painel */}
@@ -153,16 +337,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              {isCliente ? 'Central de Atendimento' : 'Painel Analítico de Atendimento'}
+              Painel Analítico de Atendimento
             </h1>
             <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
               {currentCompany?.razao_social || 'TicketFlow'}
             </span>
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            {isCliente 
-              ? 'Acompanhe o status e a resolução dos seus chamados em tempo real.'
-              : 'Indicadores operacionais, controle de SLA e pesquisa de satisfação CSAT consumidos do Supabase.'}
+            Indicadores operacionais, controle de SLA e pesquisa de satisfação CSAT consumidos do Supabase.
           </p>
         </div>
 
@@ -377,85 +559,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
         </>
       )}
 
-      {/* SEÇÃO SIMPLIFICADA PARA CLIENTE (Caso role === 'Cliente') */}
-      {isCliente && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 shadow-sm relative overflow-hidden">
-          <div className="max-w-2xl relative z-10 space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Portal de Atendimento do Cliente</span>
-            </div>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              Olá, {profile?.nome?.split(' ')[0] || 'Cliente'}! Como podemos ajudar hoje?
-            </h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Bem-vindo ao canal oficial de suporte da <strong className="text-slate-800">{currentCompany?.razao_social || 'TicketFlow'}</strong>.
-              Você pode abrir novos chamados técnicos para nossa equipe ou acompanhar o andamento das suas solicitações ativas.
-            </p>
-
-            <div className="pt-4 flex flex-wrap items-center gap-3">
-              {onNavigateTab && (
-                <>
-                  <button
-                    onClick={() => onNavigateTab('meus-chamados')}
-                    className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all hover:scale-[1.01]"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Abrir Novo Chamado</span>
-                  </button>
-
-                  <button
-                    onClick={() => onNavigateTab('meus-chamados')}
-                    className="flex items-center gap-2 px-5 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold shadow-sm transition-all"
-                  >
-                    <TicketIcon className="w-4 h-4 text-blue-600" />
-                    <span>Ver Meus Chamados</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-8 pt-8 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Chamados em Análise
-              </span>
-              <span className="text-2xl font-black text-blue-600 block mt-1">
-                {totalAbertos}
-              </span>
-              <p className="text-[11px] text-slate-500 mt-0.5">Sendo atendidos por nossa equipe</p>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Chamados Concluídos
-              </span>
-              <span className="text-2xl font-black text-emerald-600 block mt-1">
-                {statusCounts['Resolvido'] + statusCounts['Fechado']}
-              </span>
-              <p className="text-[11px] text-slate-500 mt-0.5">Finalizados com sucesso</p>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Total de Atendimentos
-              </span>
-              <span className="text-2xl font-black text-slate-800 block mt-1">
-                {totalTickets}
-              </span>
-              <p className="text-[11px] text-slate-500 mt-0.5">Seu histórico na plataforma</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Tabela de Chamados Recentes com Design Corporativo em Tema Claro */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div>
             <h2 className="text-base font-bold text-slate-900">
-              {isCliente ? 'Meus Chamados Recentes' : 'Chamados Recentes da Empresa'}
+              Chamados Recentes da Empresa
             </h2>
             <p className="text-xs text-slate-500">
               Visualização operacional rápida das últimas solicitações registradas
