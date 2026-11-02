@@ -1,9 +1,10 @@
 /**
- * InfoTicket - Script de Limpeza de Dados de Teste v1.1.0
+ * InfoTicket - Script de Limpeza de Dados de Teste v1.2.0
  * Remove com segurança todos os dados operacionais e de empresas de teste no Supabase:
  * - Remove todos os chamados de teste (tickets, ticket_messages, ticket_attachments) da Infocast
  * - Remove a organização cliente de teste "Casa Eloy"
  * - Remove todos os perfis e usuários do Auth, preservando estritamente "denise@infocast-web.com.br"
+ * - Paginação exaustiva para varrer e remover 100% dos usuários fantasmas em auth.users
  * - Preserva a empresa Master "Infocast" e suas configurações (SMTP, Chatwoot/Chat4u)
  * 
  * Execução: npm run db:clean
@@ -55,7 +56,7 @@ const MASTER_COMPANY_NAME = 'Infocast';
 
 async function cleanTestData() {
   console.log('=====================================================');
-  console.log('🧹 InfoTicket - Iniciando Limpeza de Dados de Teste v1.1.0');
+  console.log('🧹 InfoTicket - Iniciando Limpeza de Dados de Teste v1.2.0');
   console.log('=====================================================');
 
   try {
@@ -122,8 +123,57 @@ async function cleanTestData() {
     if (orgErr) console.warn(`Aviso em client_organizations: ${orgErr.message}`);
     else console.log(`✅ Organizações de teste removidas: ${orgCount ?? 0}`);
 
-    // 4. Remover perfis de teste da tabela profiles (exceto denise@infocast-web.com.br)
-    console.log('\n--- 4. Removendo perfis de usuários de teste ---');
+    // 4. Remover usuários do Supabase Auth (auth.users) exceto denise@infocast-web.com.br
+    // Executa varredura com paginação para garantir que todas as contas fantasmas sejam removidas
+    console.log('\n--- 4. Removendo contas de teste do Supabase Auth (auth.users) ---');
+    let hasMoreUsers = true;
+    let page = 1;
+    let totalAuthDeleted = 0;
+
+    while (hasMoreUsers) {
+      const { data: authList, error: authListErr } = await supabase.auth.admin.listUsers({
+        page: page,
+        perPage: 100,
+      });
+
+      if (authListErr) {
+        console.warn(`Aviso ao listar auth.users (página ${page}): ${authListErr.message}`);
+        break;
+      }
+
+      if (!authList || !authList.users || authList.users.length === 0) {
+        hasMoreUsers = false;
+        break;
+      }
+
+      let deletedInBatch = 0;
+      for (const authUser of authList.users) {
+        const userEmail = (authUser.email || '').trim().toLowerCase();
+        if (userEmail !== MASTER_EMAIL.toLowerCase()) {
+          console.log(`Removendo auth user: ${authUser.email} (ID: ${authUser.id})...`);
+          const { error: delErr } = await supabase.auth.admin.deleteUser(authUser.id);
+          if (delErr) {
+            console.warn(`  ⚠️ Falha ao excluir auth user ${authUser.email}: ${delErr.message}`);
+          } else {
+            totalAuthDeleted++;
+            deletedInBatch++;
+          }
+        }
+      }
+
+      // Se não removeu ninguém no lote (apenas continha a Denise), avança a página
+      if (deletedInBatch === 0 || authList.users.length < 100) {
+        if (authList.users.length < 100) {
+          hasMoreUsers = false;
+        } else {
+          page++;
+        }
+      }
+    }
+    console.log(`✅ Total de usuários removidos do Supabase Auth: ${totalAuthDeleted}`);
+
+    // 5. Remover perfis de teste da tabela profiles (exceto denise@infocast-web.com.br)
+    console.log('\n--- 5. Removendo perfis de usuários de teste na tabela profiles ---');
     console.log(`Preservando estritamente: ${MASTER_EMAIL}`);
     const { count: profCount, error: profErr } = await supabase
       .from('profiles')
@@ -133,28 +183,7 @@ async function cleanTestData() {
     if (profErr) {
       console.error(`❌ Erro ao excluir perfis de teste: ${profErr.message}`);
     } else {
-      console.log(`✅ Perfis de teste removidos: ${profCount ?? 0}`);
-    }
-
-    // 5. Remover usuários do Supabase Auth (auth.users) exceto denise@infocast-web.com.br
-    console.log('\n--- 5. Removendo contas de teste do Supabase Auth ---');
-    const { data: authList, error: authListErr } = await supabase.auth.admin.listUsers();
-    if (authListErr) {
-      console.warn(`Aviso ao listar auth.users: ${authListErr.message}`);
-    } else if (authList && authList.users) {
-      let authDeletedCount = 0;
-      for (const authUser of authList.users) {
-        if (authUser.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase()) {
-          console.log(`Removendo auth user: ${authUser.email} (${authUser.id})...`);
-          const { error: delErr } = await supabase.auth.admin.deleteUser(authUser.id);
-          if (delErr) {
-            console.warn(`Aviso ao excluir auth user ${authUser.email}: ${delErr.message}`);
-          } else {
-            authDeletedCount++;
-          }
-        }
-      }
-      console.log(`✅ Usuários removidos do Supabase Auth: ${authDeletedCount}`);
+      console.log(`✅ Perfis de teste removidos de public.profiles: ${profCount ?? 0}`);
     }
 
     // 6. Remover empresas que não sejam "Infocast"

@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.12.2
+ * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.13.0
  * Controle de Acesso Baseado em Papéis com Isolamento Estrito Multi-tenant (RLS)
  * Suporte a Arquitetura B2B2B (Organizações Clientes)
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
@@ -178,7 +178,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
         }
       }
 
-      await dataService.createProfile({
+      const result = await dataService.createProfile({
         company_id: currentCompany.id,
         client_organization_id: finalOrgId,
         nome: nome.trim(),
@@ -188,11 +188,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
         recebe_notificacoes: recebeNotificacoes,
       });
 
-      setSuccessMsg('Usuário adicionado com sucesso ao tenant!');
+      setSuccessMsg(`Usuário adicionado com sucesso! Senha temporária gerada: ${result.temporaryPassword} (enviada por e-mail).`);
       setTimeout(() => {
         setIsModalOpen(false);
         setSuccessMsg(null);
-      }, 1200);
+      }, 2500);
 
       await loadData();
     } catch (err: any) {

@@ -1,7 +1,8 @@
 /**
- * InfoTicket - AuthContext v1.12.0
+ * InfoTicket - AuthContext v1.13.0
  * Contexto de Autenticação e Gestão de Sessão Multi-tenant Supabase
  * Suporte a Context Switcher para Super Admin (activeCompanyId)
+ * Proteção contra Sessão Fantasma: Força logout se o usuário do Auth não possuir registro na tabela profiles
  */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
@@ -31,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   // Busca dados de Perfil e Empresa para o usuário autenticado
-  const fetchUserData = async (currentUserId: string) => {
+  const fetchUserData = async (currentUserId: string): Promise<boolean> => {
     try {
       // 1. Busca perfil do usuário
       const { data: profileData, error: profileError } = await supabase
@@ -48,34 +49,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setCompany(null);
         setActiveCompanyIdState(null);
-        return;
+        return false;
       }
 
-      if (profileData) {
-        setProfile(profileData);
+      // Se a consulta não retornar perfil (usuário deletado ou inexistente em profiles)
+      // Proteção contra sessão fantasma: Força encerramento imediato da sessão
+      if (!profileData) {
+        console.warn('⚠️ Sessão fantasma detectada: Usuário autenticado no Auth mas sem registro na tabela profiles. Forçando logout...');
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+        setCompany(null);
+        setActiveCompanyIdState(null);
+        return false;
+      }
 
-        // Define a empresa ativa inicial se ainda não selecionada
-        const targetCompanyId = activeCompanyId || profileData.company_id;
-        setActiveCompanyIdState(targetCompanyId);
+      setProfile(profileData);
 
-        // 2. Busca empresa ativa vinculada
-        if (targetCompanyId) {
-          const { data: companyData, error: companyError } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', targetCompanyId)
-            .maybeSingle();
+      // Define a empresa ativa inicial se ainda não selecionada
+      const targetCompanyId = activeCompanyId || profileData.company_id;
+      setActiveCompanyIdState(targetCompanyId);
 
-          if (companyError) {
-            console.warn('Erro ao carregar empresa ativa:', companyError.message);
-            setCompany(null);
-          } else {
-            setCompany(companyData);
-          }
+      // 2. Busca empresa ativa vinculada
+      if (targetCompanyId) {
+        const { data: companyData, error: companyError } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', targetCompanyId)
+          .maybeSingle();
+
+        if (companyError) {
+          console.warn('Erro ao carregar empresa ativa:', companyError.message);
+          setCompany(null);
+        } else {
+          setCompany(companyData);
         }
       }
+      return true;
     } catch (err) {
       console.error('Falha inesperada ao sincronizar sessão multi-tenant:', err);
+      return false;
     }
   };
 
@@ -105,20 +119,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // 1. Obtém sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
+        await fetchUserData(session.user.id);
       }
+      setLoading(false);
     });
 
     // 2. Escuta mudanças na autenticação (login, logout, refresh de token)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
@@ -127,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setProfile(null);
         setCompany(null);
+        setActiveCompanyIdState(null);
       }
       setLoading(false);
     });
@@ -143,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSession(null);
     setProfile(null);
     setCompany(null);
+    setActiveCompanyIdState(null);
     setLoading(false);
   };
 

@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Configurações da Empresa v1.19.0
+ * TicketFlow - Configurações da Empresa v1.20.0
  * Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
  * Interface Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
@@ -425,7 +425,9 @@ export const SettingsPage: React.FC = () => {
   };
 
   const availableVariables = [
-    { tag: '{{nome_cliente}}', desc: 'Nome completo do cliente solicitante' },
+    { tag: '{{nome_cliente}}', desc: 'Nome completo do cliente ou usuário' },
+    { tag: '{{email_cliente}}', desc: 'E-mail cadastrado do usuário' },
+    { tag: '{{senha_temporaria}}', desc: 'Senha temporária gerada no onboarding' },
     { tag: '{{nome_empresa}}', desc: 'Razão social ou nome do tenant' },
     { tag: '{{ticket_id}}', desc: 'Código identificador do chamado' },
     { tag: '{{assunto}}', desc: 'Assunto do chamado' },
@@ -1291,6 +1293,35 @@ export const SettingsPage: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {/* Guia para o Super Admin: Templates Nativos do Supabase Auth */}
+            {isSuperAdmin && (
+              <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center gap-2 text-blue-900">
+                  <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
+                  <h3 className="text-xs font-bold uppercase tracking-wide">
+                    Configuração de Confirmações Nativas do Supabase Auth
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Os e-mails em inglês (como <em>"Confirm your email address"</em>) e links que apontam para <code>localhost:3000</code> são disparados diretamente pelo serviço de autenticação nativo do Supabase. Para personalizá-los e corrigir o redirecionamento:
+                </p>
+                <div className="bg-white/90 border border-blue-100 rounded-xl p-4 text-xs space-y-2 text-slate-700">
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-700 shrink-0">1. Redirecionamento (Site URL):</span>
+                    <span>No painel web do Supabase, acesse <strong>Authentication &gt; URL Configuration</strong> e altere a <em>Site URL</em> para o endereço oficial de produção: <code>https://dev2.infocast.com.br/ticketflow</code>. Adicione também a URL nas <em>Redirect URLs</em> para que o clique do link não caia em localhost recusado.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-700 shrink-0">2. Templates Nativos em Português:</span>
+                    <span>Acesse <strong>Authentication &gt; Email Templates &gt; Confirm signup</strong>. Você pode colar o layout HTML em português e usar variáveis como <code>{'{{ .ConfirmationURL }}'}</code> e <code>{'{{ .Token }}'}</code>.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-blue-700 shrink-0">3. Confirmação Automática:</span>
+                    <span>No cadastro de novos usuários pelo TicketFlow, as contas são criadas pré-confirmadas (<code>email_confirm: true</code>) com senha temporária enviada via template corporativo com SMTP próprio.</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

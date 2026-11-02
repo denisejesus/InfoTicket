@@ -2,14 +2,34 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.18.2
+ * Serviço de dados do TicketFlow v1.19.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
   /**
+   * Gera uma senha temporária aleatória e segura (mínimo 10 caracteres alfanuméricos)
+   */
+  generateSecureTemporaryPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let pass = '';
+    const array = new Uint32Array(10);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(array);
+      for (let i = 0; i < 10; i++) {
+        pass += chars[array[i] % chars.length];
+      }
+    } else {
+      for (let i = 0; i < 10; i++) {
+        pass += chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+    return pass;
+  },
+
+  /**
    * Cria um novo perfil na tabela profiles (RBAC / Gestão de Equipe e Clientes)
-   * Deixa que o Supabase/PostgreSQL gere automaticamente o UUID se não for informado
-   * e dispara a notificação de boas-vindas por e-mail com as credenciais.
+   * Provisiona a credencial de acesso diretamente no Supabase Auth via Service Role (Edge Function)
+   * e dispara a notificação de boas-vindas com a senha real temporária gerada.
    */
   async createProfile(profileData: {
     company_id: string;
@@ -19,11 +39,15 @@ export const dataService = {
     whatsapp?: string | null;
     role: string;
     recebe_notificacoes: boolean;
-  }): Promise<Profile | null> {
+    temporary_password?: string;
+  }): Promise<{ profile: Profile; temporaryPassword: string }> {
+    const rawEmail = profileData.email.trim().toLowerCase();
+    const tempPassword = profileData.temporary_password || this.generateSecureTemporaryPassword();
+
     const payload: Record<string, any> = {
       company_id: profileData.company_id,
-      nome: profileData.nome,
-      email: profileData.email,
+      nome: profileData.nome.trim(),
+      email: rawEmail,
       whatsapp: profileData.whatsapp?.trim() || null,
       role: profileData.role,
       recebe_notificacoes: profileData.recebe_notificacoes,
@@ -33,7 +57,8 @@ export const dataService = {
       payload.client_organization_id = profileData.client_organization_id;
     }
 
-    const { data, error } = await supabase
+    // 1. Cria o registro na tabela public.profiles
+    const { data: profileRecord, error } = await supabase
       .from('profiles')
       .insert(payload)
       .select(`
@@ -47,15 +72,28 @@ export const dataService = {
       throw error;
     }
 
-    // Dispara a Edge Function de boas-vindas para o novo usuário
+    // 2. Provisiona a credencial de autenticação no Supabase Auth via Edge Function reset-user-password (Service Role)
+    try {
+      console.log(`🔐 Provisionando usuário no Supabase Auth: ${rawEmail}...`);
+      await this.resetUserPassword(profileRecord.id, tempPassword, rawEmail);
+    } catch (authErr) {
+      console.warn('Aviso: Falha ao sincronizar senha no Auth via Service Role:', authErr);
+    }
+
+    // 3. Dispara a Edge Function de boas-vindas com a senha temporária real gerada
     try {
       await supabase.functions.invoke('send-notification', {
         body: {
           event_type: 'welcome_email',
           company_id: profileData.company_id,
-          user_id: data.id,
-          recipient_email: profileData.email,
-          recipient_name: profileData.nome,
+          user_id: profileRecord.id,
+          recipient_email: rawEmail,
+          recipient_name: profileData.nome.trim(),
+          temp_password: tempPassword,
+          custom_data: {
+            senha: tempPassword,
+            senha_temporaria: tempPassword,
+          },
           app_url: typeof window !== 'undefined' ? `${window.location.origin}/ticketflow` : 'https://dev2.infocast.com.br/ticketflow',
         },
       });
@@ -63,7 +101,7 @@ export const dataService = {
       console.warn('Aviso: Falha ao enviar notificação de boas-vindas para novo perfil:', notifyErr);
     }
 
-    return data;
+    return { profile: profileRecord, temporaryPassword: tempPassword };
   },
 
   /**
@@ -1182,7 +1220,7 @@ export const dataService = {
         company_id: companyId,
         tipo: 'welcome_email',
         assunto: 'Bem-vindo ao TicketFlow - {{nome_empresa}}',
-        corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nSeja muito bem-vindo ao portal de atendimento da {{nome_empresa}}.\nSeu acesso foi configurado com sucesso e nossa equipe está à disposição para auxiliá-lo.\n\nAcesse nosso portal a qualquer momento: {{portal_url}}\n\nAtenciosamente,\nEquipe de Suporte {{nome_empresa}}',
+        corpo_mensagem: 'Olá, {{nome_cliente}}!\n\nSeja muito bem-vindo ao portal de atendimento da {{nome_empresa}}.\nSeu acesso foi configurado com sucesso e nossa equipe está à disposição para auxiliá-lo.\n\nSeus dados de acesso:\nE-mail: {{email_cliente}}\nSenha temporária: {{senha_temporaria}}\n\nAcesse nosso portal a qualquer momento: {{portal_url}}\n\nAtenciosamente,\nEquipe de Suporte {{nome_empresa}}',
       },
       {
         company_id: companyId,

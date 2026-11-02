@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - Reset User Password Edge Function v1.16.0
+ * TicketFlow - Reset User Password Edge Function v1.17.0
  * Força a alteração de senha de um usuário no Supabase Auth via Service Role
  * Resolve o usuário pelo ID ou pelo e-mail caso os IDs de `profiles` e `auth.users` divirjam
+ * Permite também a criação direta de credencial para novos usuários criados no sistema
  */
 
 const corsHeaders = {
@@ -14,7 +15,7 @@ const corsHeaders = {
 };
 
 interface ResetPasswordPayload {
-  user_id: string;
+  user_id?: string;
   email?: string;
   new_password: string;
 }
@@ -36,11 +37,11 @@ serve(async (req: Request) => {
     const body: ResetPasswordPayload = await req.json();
     const { user_id, email, new_password } = body;
 
-    if (!user_id || !new_password) {
+    if ((!user_id && !email) || !new_password) {
       return new Response(
         JSON.stringify({
           success: false,
-          message: "Parâmetros user_id e new_password são obrigatórios.",
+          message: "Parâmetros (user_id ou email) e new_password são obrigatórios.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -96,17 +97,25 @@ serve(async (req: Request) => {
       }
     }
 
-    // Tenta atualizar diretamente pelo user_id
-    const { data: directData, error: directError } = await supabaseAdmin.auth.admin.updateUserById(
-      user_id,
-      { password: new_password }
-    );
+    // Se passou user_id, tenta atualizar diretamente pelo user_id
+    let directError: any = null;
+    if (user_id) {
+      const { data: directData, error: dErr } = await supabaseAdmin.auth.admin.updateUserById(
+        user_id,
+        { password: new_password }
+      );
+      directError = dErr;
 
-    if (!directError && directData?.user) {
-      targetAuthUserId = directData.user.id;
-      console.log(`✅ [Reset Password] Senha atualizada com sucesso diretamente pelo ID: ${targetAuthUserId}`);
-    } else {
-      console.warn(`⚠️ Tentativa direta por user_id ${user_id} retornou: ${directError?.message}. Tentando busca por e-mail...`);
+      if (!directError && directData?.user) {
+        targetAuthUserId = directData.user.id;
+        console.log(`✅ [Reset Password] Senha atualizada com sucesso diretamente pelo ID: ${targetAuthUserId}`);
+      }
+    }
+
+    if (!targetAuthUserId) {
+      if (user_id) {
+        console.warn(`⚠️ Tentativa direta por user_id ${user_id} retornou: ${directError?.message}. Tentando busca por e-mail...`);
+      }
 
       // Se falhou por "User not found" ou divergência de ID, busca em auth.users pelo e-mail
       if (targetEmail) {
@@ -179,10 +188,17 @@ serve(async (req: Request) => {
 
     // 2. Atualiza timestamp e, se necessário, sincroniza na tabela profiles
     try {
-      await supabaseAdmin
-        .from("profiles")
-        .update({ atualizado_em: new Date().toISOString() })
-        .eq("id", user_id);
+      if (user_id) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ atualizado_em: new Date().toISOString() })
+          .eq("id", user_id);
+      } else if (targetEmail) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ atualizado_em: new Date().toISOString() })
+          .eq("email", targetEmail);
+      }
     } catch (e) {
       console.warn("Aviso ao atualizar timestamp do profile:", e);
     }
