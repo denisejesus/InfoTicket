@@ -91,7 +91,7 @@ export const GlobalAdmin: React.FC = () => {
       await loadCompanies();
     } catch (err: any) {
       console.error('Erro ao atualizar empresa:', err);
-      setModalError(err.message || 'Falha ao salvar alterações no Supabase.');
+      setModalError(err.message || 'Falha ao salvar alterações no sistema.');
     } finally {
       setSavingEdit(false);
     }
@@ -133,10 +133,10 @@ export const GlobalAdmin: React.FC = () => {
             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
               Master Infocast
             </span>
-            <span className="text-xs text-slate-500 font-medium">Controle Multi-Tenant</span>
+            <span className="text-xs text-slate-500 font-medium">Controle de Organizações</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
-            Administração Global de Tenants
+            Administração Global de Organizações
           </h1>
           <p className="text-sm text-slate-600 mt-0.5">
             Gerenciamento global de empresas clientes, períodos de avaliação (Trial) e status de licenciamento.
@@ -148,7 +148,7 @@ export const GlobalAdmin: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Atualizar Tenants</span>
+          <span>Atualizar Organizações</span>
         </button>
       </div>
 
@@ -265,7 +265,7 @@ export const GlobalAdmin: React.FC = () => {
                           <span className="font-bold text-slate-900">{c.razao_social}</span>
                           {isInfocast && (
                             <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[10px] font-bold">
-                              Dona do SaaS
+                              Matriz da Plataforma
                             </span>
                           )}
                         </div>
@@ -337,7 +337,7 @@ export const GlobalAdmin: React.FC = () => {
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-tight">Editar Tenant</h2>
+                  <h2 className="text-base font-bold text-slate-900 leading-tight">Editar Organização</h2>
                   <p className="text-[11px] text-slate-500 truncate max-w-xs">{editingCompany.razao_social}</p>
                 </div>
               </div>

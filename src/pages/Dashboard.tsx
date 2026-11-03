@@ -53,7 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
       const result = await dataService.getTickets(currentCompany?.id);
       setTickets(result);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Falha ao buscar dados no Supabase.');
+      setErrorMsg(err.message || 'Falha ao buscar dados no sistema.');
     } finally {
       setLoading(false);
     }
@@ -129,9 +129,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
       borda: 'border-amber-200',
     },
     {
-      titulo: 'Total do Tenant',
+      titulo: 'Total da Organização',
       valor: loading ? '...' : totalTickets.toString(),
-      detalhe: currentCompany?.razao_social || 'Multi-tenant',
+      detalhe: currentCompany?.razao_social || 'Organização',
       icone: ShieldCheck,
       corIcone: 'text-indigo-600',
       bgIcone: 'bg-indigo-50',
@@ -344,7 +344,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
             </span>
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            Indicadores operacionais, controle de SLA e pesquisa de satisfação CSAT consumidos do Supabase.
+            Indicadores operacionais, controle de SLA e pesquisa de satisfação CSAT consolidados no sistema.
           </p>
         </div>
 
@@ -552,7 +552,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
               </div>
 
               <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400 text-center">
-                Automação ativa via triggers e Edge Function Supabase.
+                Automação ativa via triggers e processamento em nuvem.
               </div>
             </div>
           </div>
@@ -585,7 +585,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
           {loading ? (
             <div className="p-10 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-              <span>Carregando chamados do Supabase...</span>
+              <span>Carregando chamados do sistema...</span>
             </div>
           ) : tickets.length === 0 ? (
             <div className="p-10 text-center text-xs text-slate-500">

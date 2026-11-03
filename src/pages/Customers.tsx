@@ -49,7 +49,7 @@ export const Customers: React.FC<CustomersProps> = ({ activeCompany }) => {
         {loading ? (
           <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-            Carregando clientes da API do Supabase...
+            Carregando clientes do sistema...
           </div>
         ) : customers.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-500">

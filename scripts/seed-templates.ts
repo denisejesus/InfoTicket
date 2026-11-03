@@ -1,7 +1,7 @@
 /**
- * InfoTicket - Seed de Templates Padrão de Comunicação (v1.18.3)
- * Utiliza o Supabase Client com Service Role Key para persistir
- * os templates diretamente na tabela public.communication_templates
+ * InfoTicket - Seed de Templates Padrão de Comunicação (v1.21.0)
+ * Inicializa os templates padrão na tabela public.communication_templates
+ * com suporte completo a variáveis dinâmicas de contexto
  */
 import fs from 'fs';
 import path from 'path';

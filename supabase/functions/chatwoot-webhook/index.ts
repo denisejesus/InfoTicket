@@ -53,7 +53,7 @@ serve(async (req: Request) => {
       const conversation = payload.conversation || payload;
       const conversationId = conversation.id;
       const messageContent =
-        payload.content || conversation.messages?.[0]?.content || "Atendimento iniciado via Chatwoot / Chat4u";
+        payload.content || conversation.messages?.[0]?.content || "Atendimento iniciado via WhatsApp";
       const sender = payload.sender || conversation.meta?.sender;
       const senderName = sender?.name || "Cliente WhatsApp";
       const senderEmail = sender?.email || null;
@@ -106,8 +106,8 @@ serve(async (req: Request) => {
       const clienteId = matchedProfile?.id || null;
       const clientOrgId = matchedProfile?.client_organization_id || null;
 
-      // 1. Verifica se já existe um chamado associado a esta conversa do Chatwoot
-      const assuntoChamado = `Atendimento WhatsApp Chat4u #${conversationId} - ${senderName}`;
+      // 1. Verifica se já existe um chamado associado a esta conversa do WhatsApp
+      const assuntoChamado = `Atendimento WhatsApp #${conversationId} - ${senderName}`;
       
       const { data: existingTicket } = await supabase
         .from("tickets")

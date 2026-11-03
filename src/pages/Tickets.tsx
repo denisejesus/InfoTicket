@@ -303,7 +303,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
           {loading ? (
           <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-            <span>Carregando chamados do Supabase...</span>
+            <span>Carregando chamados do sistema...</span>
           </div>
         ) : filteredTickets.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-500">

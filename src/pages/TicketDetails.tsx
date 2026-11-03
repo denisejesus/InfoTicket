@@ -36,7 +36,10 @@ import {
   ExternalLink,
   Trash2,
   Sparkles,
-  Layers
+  Layers,
+  Eye,
+  EyeOff,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -128,7 +131,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   // Modal de Encerramento
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
 
-  // Status de Integração com Chat4u / Chatwoot
+  // Controle de Visualização da Linha do Tempo: alternar logs técnicos/auditoria
+  const [showTechnicalLogs, setShowTechnicalLogs] = useState(false);
+
+  // Status de Integração com WhatsApp
   const [companyChatwoot, setCompanyChatwoot] = useState<Company | null>(null);
 
   // Lista de Operadores/Staff para Atribuição (Gestor, Gerente, Operador)
@@ -547,7 +553,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
           if (edgeErr || (edgeData && edgeData.success === false)) {
             // Tenta extrair a mensagem detalhada enviada pela Edge Function
-            let detailMsg = 'Falha ao entregar mensagem no Chatwoot / Chat4u.';
+            let detailMsg = 'Falha ao entregar mensagem no WhatsApp.';
             if (edgeErr && (edgeErr as any).context) {
               try {
                 const errJson = await (edgeErr as any).context.json();
@@ -562,10 +568,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             }
 
             console.error('❌ Erro na Edge Function send-whatsapp-official:', detailMsg);
-            setSendError(`Erro na Edge Function: ${detailMsg}`);
-            alert(`Erro na Edge Function: ${detailMsg}`);
+            setSendError(`Erro no envio: ${detailMsg}`);
+            alert(`Erro no envio: ${detailMsg}`);
           } else {
-            setSendSuccess('Mensagem Oficial de WhatsApp enviada com sucesso via Chat4u!');
+            setSendSuccess('Mensagem Oficial de WhatsApp enviada com sucesso!');
             alert('Mensagem enviada com sucesso!');
             setTimeout(() => setSendSuccess(null), 5000);
           }
@@ -724,9 +730,24 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   // Unifica mensagens visíveis e logs de auditoria em uma linha do tempo cronológica
   type TimelineItem = 
     | { type: 'message'; data: TicketMessage; timestamp: string }
-    | { type: 'audit'; data: AuditLog; timestamp: string };
+    | { type: 'audit'; data: AuditLog; timestamp: string; isTechnical: boolean };
 
-  const timelineItems: TimelineItem[] = [
+  const isTechnicalLog = (acao: string): boolean => {
+    const text = (acao || '').toLowerCase();
+    return (
+      text.includes('smtp') ||
+      text.includes('falha disparo e-mail') ||
+      text.includes('erro fatal e-mail') ||
+      text.includes('edge function') ||
+      text.includes('sendgrid') ||
+      text.includes('provedor') ||
+      text.includes('status: error') ||
+      text.includes('status: exception') ||
+      text.includes('no_smtp_configured')
+    );
+  };
+
+  const allTimelineItems: TimelineItem[] = [
     ...visibleMessages.map((m) => ({
       type: 'message' as const,
       data: m,
@@ -736,8 +757,21 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
       type: 'audit' as const,
       data: a,
       timestamp: a.criado_em,
+      isTechnical: isTechnicalLog(a.acao),
     })),
   ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Na visão principal, oculta logs técnicos brutos a menos que o operador ative o toggle de auditoria
+  const timelineItems = allTimelineItems.filter((item) => {
+    if (item.type === 'audit' && item.isTechnical && !showTechnicalLogs) {
+      return false;
+    }
+    return true;
+  });
+
+  const technicalLogsCount = allTimelineItems.filter(
+    (item) => item.type === 'audit' && item.isTechnical
+  ).length;
 
   return (
     <div className="space-y-6 font-sans antialiased text-slate-900">
@@ -1215,14 +1249,41 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
       {/* LINHA DO TEMPO (Timeline com Auditoria e Mensagens) */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-blue-600" />
             <h2 className="text-base font-bold text-slate-900">Linha do Tempo & Interações</h2>
           </div>
-          <span className="text-xs text-slate-500 font-medium">
-            {timelineItems.length} {timelineItems.length === 1 ? 'evento' : 'eventos'}
-          </span>
+          
+          <div className="flex items-center gap-2">
+            {technicalLogsCount > 0 && !isCliente && (
+              <button
+                type="button"
+                onClick={() => setShowTechnicalLogs(!showTechnicalLogs)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                  showTechnicalLogs
+                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
+                }`}
+                title="Alternar visualização de logs técnicos de entrega e provedor"
+              >
+                {showTechnicalLogs ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Ocultar Logs de Sistema ({technicalLogsCount})</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Auditoria Técnica ({technicalLogsCount})</span>
+                  </>
+                )}
+              </button>
+            )}
+            <span className="text-xs text-slate-500 font-medium">
+              {timelineItems.length} {timelineItems.length === 1 ? 'evento' : 'eventos'}
+            </span>
+          </div>
         </div>
 
         {timelineItems.length === 0 ? (
@@ -1245,10 +1306,20 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   month: '2-digit',
                 });
 
+                const isTech = item.isTechnical;
+
                 return (
                   <div key={`audit-${log.id}`} className="flex items-center justify-center my-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100/90 border border-slate-200/80 rounded-full text-[11px] text-slate-500 shadow-sm">
-                      <Activity className="w-3 h-3 text-slate-400 shrink-0" />
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-sm border ${
+                      isTech
+                        ? 'bg-amber-50/90 border-amber-200 text-amber-800'
+                        : 'bg-slate-100/90 border border-slate-200/80 text-slate-500'
+                    }`}>
+                      {isTech ? (
+                        <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                      ) : (
+                        <Activity className="w-3 h-3 text-slate-400 shrink-0" />
+                      )}
                       <span>
                         <strong className="text-slate-700 font-semibold">{log.user?.nome || 'Sistema'}</strong>{' '}
                         {log.acao} às {horaFormatada} ({dataFormatada})
@@ -1261,161 +1332,181 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               const msg = item.data;
               const isWhisper = msg.is_internal_note;
               const isSenderMe = msg.user_id === user?.id;
+              // Determina se a mensagem é do cliente (lado esquerdo) ou do operador/agente (lado direito)
+              const isClientSender = msg.user?.role === 'Cliente' || msg.user_id === ticket?.cliente_id;
 
               return (
                 <div
                   key={`msg-${msg.id}`}
-                  className={`p-4 rounded-xl border transition-all ${
+                  className={`flex flex-col transition-all ${
                     isWhisper
-                      ? 'bg-amber-50/80 border-amber-200 text-amber-900 shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-900 shadow-sm'
+                      ? 'w-full'
+                      : isClientSender
+                      ? 'items-start mr-4 sm:mr-16'
+                      : 'items-end ml-4 sm:ml-16'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                          isWhisper
-                            ? 'bg-amber-200 text-amber-800'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}
-                      >
-                        {msg.user?.nome?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-slate-900">
-                            {msg.user?.nome || 'Usuário'}
-                          </span>
-                          {msg.user?.role && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                              {msg.user.role}
-                            </span>
-                          )}
-                          {isSenderMe && (
-                            <span className="text-[10px] font-bold text-blue-600">(Você)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Badge de Canal Omnichannel */}
-                      {!isWhisper && msg.channel && (
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            msg.channel === 'whatsapp'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : msg.channel === 'email'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                  <div
+                    className={`w-full max-w-2xl p-4 rounded-2xl border shadow-sm transition-all ${
+                      isWhisper
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                        : isClientSender
+                        ? 'bg-white border-slate-200 text-slate-900 rounded-tl-xs'
+                        : 'bg-blue-50/70 border-blue-200 text-slate-900 rounded-tr-xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                            isWhisper
+                              ? 'bg-amber-200 text-amber-800'
+                              : isClientSender
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                              : 'bg-blue-600 text-white shadow-xs'
                           }`}
                         >
-                          {msg.channel === 'whatsapp' ? (
-                            <>
-                              <Phone className="w-2.5 h-2.5 text-emerald-600" />
-                              <span>WhatsApp</span>
-                            </>
-                          ) : msg.channel === 'email' ? (
-                            <>
-                              <Mail className="w-2.5 h-2.5 text-blue-600" />
-                              <span>E-mail</span>
-                            </>
-                          ) : (
-                            <span>Sistema</span>
-                          )}
-                        </span>
-                      )}
+                          {msg.user?.nome?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs text-slate-900">
+                              {msg.user?.nome || 'Usuário'}
+                            </span>
+                            {msg.user?.role && (
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
+                                isClientSender
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : 'bg-blue-100 text-blue-700 border-blue-200'
+                              }`}>
+                                {msg.user.role}
+                              </span>
+                            )}
+                            {isSenderMe && (
+                              <span className="text-[10px] font-bold text-blue-600">(Você)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
-                      {/* Badge de Nota Interna */}
-                      {isWhisper && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
-                          <Lock className="w-3 h-3 text-amber-800" />
-                          Nota Interna (Whisper)
-                        </span>
-                      )}
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(msg.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                  </div>
+                      <div className="flex items-center gap-2">
+                        {/* Badge de Canal Omnichannel */}
+                        {!isWhisper && msg.channel && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              msg.channel === 'whatsapp'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : msg.channel === 'email'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
+                          >
+                            {msg.channel === 'whatsapp' ? (
+                              <>
+                                <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>WhatsApp</span>
+                              </>
+                            ) : msg.channel === 'email' ? (
+                              <>
+                                <Mail className="w-2.5 h-2.5 text-blue-600" />
+                                <span>E-mail</span>
+                              </>
+                            ) : (
+                              <span>Sistema</span>
+                            )}
+                          </span>
+                        )}
 
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap pl-9">
-                    {msg.content}
-                  </p>
-
-                  {/* Anexos vinculados à mensagem (Fase 13) */}
-                  {ticketAttachments.filter((att) => att.message_id === msg.id).length > 0 && (
-                    <div className="pl-9 pt-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {ticketAttachments
-                          .filter((att) => att.message_id === msg.id)
-                          .map((att) => {
-                            const isImg = att.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name);
-                            const sizeKb = att.file_size ? Math.round(att.file_size / 1024) : null;
-
-                            return (
-                              <div
-                                key={att.id}
-                                className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:border-blue-300 transition-all group"
-                              >
-                                {isImg ? (
-                                  <a
-                                    href={att.file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="h-24 bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100 relative group-hover:opacity-95"
-                                  >
-                                    <img
-                                      src={att.file_url}
-                                      alt={att.file_name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
-                                      <ExternalLink className="w-4 h-4 text-white drop-shadow-md" />
-                                    </div>
-                                  </a>
-                                ) : null}
-
-                                <div className="p-2 flex items-center justify-between gap-1.5">
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    {isImg ? (
-                                      <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                    ) : (
-                                      <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                    )}
-                                    <span className="text-[11px] font-semibold text-slate-800 truncate" title={att.file_name}>
-                                      {att.file_name}
-                                    </span>
-                                  </div>
-
-                                  <a
-                                    href={att.file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download={att.file_name}
-                                    className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors shrink-0"
-                                    title="Baixar anexo"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                  </a>
-                                </div>
-                                {sizeKb && (
-                                  <div className="px-2 pb-1 text-[9px] text-slate-400">
-                                    {sizeKb} KB
-                                  </div>
-                                )}
-                              </div>
-                            );
+                        {/* Badge de Nota Interna */}
+                        {isWhisper && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
+                            <Lock className="w-3 h-3 text-amber-800" />
+                            Nota Interna
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400">
+                          {new Date(msg.created_at).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
                           })}
+                        </span>
                       </div>
                     </div>
-                  )}
+
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap pl-9">
+                      {msg.content}
+                    </p>
+
+                    {/* Anexos vinculados à mensagem (Fase 13) */}
+                    {ticketAttachments.filter((att) => att.message_id === msg.id).length > 0 && (
+                      <div className="pl-9 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {ticketAttachments
+                            .filter((att) => att.message_id === msg.id)
+                            .map((att) => {
+                              const isImg = att.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name);
+                              const sizeKb = att.file_size ? Math.round(att.file_size / 1024) : null;
+
+                              return (
+                                <div
+                                  key={att.id}
+                                  className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:border-blue-300 transition-all group"
+                                >
+                                  {isImg ? (
+                                    <a
+                                      href={att.file_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="h-24 bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100 relative group-hover:opacity-95"
+                                    >
+                                      <img
+                                        src={att.file_url}
+                                        alt={att.file_name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                        <ExternalLink className="w-4 h-4 text-white drop-shadow-md" />
+                                      </div>
+                                    </a>
+                                  ) : null}
+
+                                  <div className="p-2 flex items-center justify-between gap-1.5">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      {isImg ? (
+                                        <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                      ) : (
+                                        <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                      )}
+                                      <span className="text-[11px] font-semibold text-slate-800 truncate" title={att.file_name}>
+                                        {att.file_name}
+                                      </span>
+                                    </div>
+
+                                    <a
+                                      href={att.file_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      download={att.file_name}
+                                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors shrink-0"
+                                      title="Baixar anexo"
+                                    >
+                                      <Download className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                  {sizeKb && (
+                                    <div className="px-2 pb-1 text-[9px] text-slate-400">
+                                      {sizeKb} KB
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1481,7 +1572,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 Canal de Envio Omnichannel <span className="text-rose-500">*</span>
               </label>
               <span className="text-[11px] font-medium text-slate-500">
-                {hasChatwootConfig ? 'Integração Chat4u ativa' : 'Chat4u não configurado'}
+                {hasChatwootConfig ? 'Integração WhatsApp ativa' : 'WhatsApp não configurado'}
               </span>
             </div>
 
@@ -1520,7 +1611,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 </div>
               </button>
 
-              {/* Opção 2: WhatsApp (Chat4u) */}
+              {/* Opção 2: WhatsApp */}
               {hasChatwootConfig ? (
                 <button
                   type="button"
@@ -1547,16 +1638,16 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </div>
                   <div className="truncate">
                     <div className="text-xs font-bold text-slate-900 leading-tight">
-                      Responder via WhatsApp (Chat4u)
+                      Responder via WhatsApp
                     </div>
                     <div className="text-[11px] text-emerald-700 font-medium">
-                      Disparo instantâneo via API Chatwoot
+                      Disparo instantâneo oficial
                     </div>
                   </div>
                 </button>
               ) : (
                 <div
-                  title="Chat4u não configurado para esta empresa"
+                  title="WhatsApp não configurado para esta empresa"
                   className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed select-none opacity-70"
                 >
                   <div className="w-4 h-4 rounded-full border border-slate-300 bg-slate-200 shrink-0" />
@@ -1565,13 +1656,13 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </div>
                   <div className="truncate">
                     <div className="text-xs font-bold text-slate-500 leading-tight flex items-center gap-1.5">
-                      <span>Responder via WhatsApp (Chat4u)</span>
+                      <span>Responder via WhatsApp</span>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
                         Inativo
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 truncate" title="Chat4u não configurado para esta empresa">
-                      Chat4u não configurado para esta empresa
+                    <div className="text-[11px] text-slate-500 truncate" title="WhatsApp não configurado para esta empresa">
+                      WhatsApp não configurado para esta empresa
                     </div>
                   </div>
                 </div>
@@ -1660,7 +1751,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 {loadingWhatsappTemplates ? (
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span>Consultando modelos liberados na API do Chatwoot / Meta...</span>
+                    <span>Consultando modelos liberados na API WhatsApp...</span>
                   </div>
                 ) : whatsappTemplates.length === 0 ? (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
@@ -1668,7 +1759,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                     <div>
                       <p className="font-semibold">Nenhum modelo oficial sincronizado para esta Caixa de Entrada.</p>
                       <p className="text-[11px] text-amber-700 mt-0.5">
-                        Certifique-se de que a caixa de entrada possui templates aprovados no WhatsApp Business Manager e sincronizados no Chatwoot.
+                        Certifique-se de que a caixa de entrada possui templates aprovados no WhatsApp Business Manager e sincronizados.
                       </p>
                     </div>
                   </div>
@@ -1862,7 +1953,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 </span>
               ) : (
                 <span>
-                  Disparo programado via <strong>{selectedChannel === 'whatsapp' ? 'WhatsApp (Chat4u)' : 'E-mail'}</strong>
+                  Disparo programado via <strong>{selectedChannel === 'whatsapp' ? 'WhatsApp' : 'E-mail'}</strong>
                 </span>
               )}
             </div>

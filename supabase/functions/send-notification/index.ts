@@ -205,7 +205,10 @@ serve(async (req: Request) => {
       const tempPass = payload.temp_password || payload.custom_data?.senha || "Acesso inicial configurado pelo administrador";
       const vars: Record<string, string> = {
         "{{nome_cliente}}": targetUserName,
+        "{{nome_usuario}}": targetUserName,
+        "{{nome_perfil}}": targetUserName,
         "{{email_cliente}}": targetUserEmail,
+        "{{email_usuario}}": targetUserEmail,
         "{{nome_empresa}}": companyName,
         "{{senha_temporaria}}": tempPass,
         "{{portal_url}}": appUrl,
@@ -402,12 +405,15 @@ serve(async (req: Request) => {
 
       const variablesMap: Record<string, string> = {
         "{{nome_cliente}}": clienteNome,
+        "{{nome_usuario}}": clienteNome,
         "{{nome_operador}}": operadorNome,
         "{{nome_empresa}}": companyName,
         "{{ticket_id}}": ticketShortId,
         "{{assunto}}": ticket.assunto || "Sem Assunto",
+        "{{assunto_chamado}}": ticket.assunto || "Sem Assunto",
         "{{status}}": ticket.status,
         "{{status_atual}}": ticket.status,
+        "{{novo_status}}": ticket.status,
         "{{prioridade}}": ticket.prioridade || "Média",
         "{{link_chamado}}": ticketLink,
         "{{ticket_link}}": ticketLink,

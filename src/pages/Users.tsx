@@ -1248,8 +1248,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={resettingPassword}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-sm shadow-amber-500/20 transition-all disabled:opacity-50"
+                  disabled={resettingPassword || !validatePasswordStrength(newPassword).isValid || newPassword !== confirmPassword}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-sm shadow-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {resettingPassword ? (
                     <>

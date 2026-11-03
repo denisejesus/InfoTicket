@@ -186,7 +186,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Aviso informativo de permissão RBAC para Clientes */}
+      {/* Aviso informativo de permissão para Clientes */}
       {isCliente && (
         <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2">
           <Layers className="w-4 h-4 text-blue-600 flex-shrink-0" />
