@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.23.0
+ * Serviço de dados do TicketFlow v1.24.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -1649,6 +1649,130 @@ export const dataService = {
     if (error) {
       console.error('Erro ao excluir canal Chatwoot:', error.message);
       throw error;
+    }
+  },
+
+  /**
+   * Lista conversas ativas (status = open) de um Canal de WhatsApp (Chatwoot) da empresa ativa
+   */
+  async listWhatsappConversations(params: {
+    company_id: string;
+    channel_id: string;
+  }): Promise<{
+    conversations: Array<{
+      conversation_id: number;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string;
+      contact_avatar: string;
+      last_message: string;
+      last_activity_at: string;
+      unread_count: number;
+      status: string;
+      existing_ticket_id: string | null;
+      existing_ticket_subject: string | null;
+    }>;
+  }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('list-whatsapp-conversations', {
+        body: params,
+      });
+
+      if (!error && data) {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return {
+          conversations: Array.isArray(data.conversations) ? data.conversations : [],
+        };
+      }
+
+      // Fallback direto via fetch caso functions.invoke falhe no ambiente
+      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+      const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseAnonKey) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/list-whatsapp-conversations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${supabaseAnonKey}`,
+            apikey: supabaseAnonKey,
+          },
+          body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+          throw new Error(json.error || `Falha ao listar conversas (${res.status}).`);
+        }
+        return {
+          conversations: Array.isArray(json.conversations) ? json.conversations : [],
+        };
+      }
+
+      throw new Error(error?.message || 'Erro ao buscar conversas abertas do WhatsApp.');
+    } catch (err: any) {
+      console.error('[dataService.listWhatsappConversations] Erro:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Importa uma conversa ativa do WhatsApp e cria o chamado + histórico de mensagens no TicketFlow
+   */
+  async importWhatsappConversation(params: {
+    company_id: string;
+    channel_id?: string;
+    conversation_id: number | string;
+    client_organization_id: string;
+    cliente_id: string;
+    operador_id?: string | null;
+    contact_name?: string;
+    contact_phone?: string;
+    custom_subject?: string;
+    prioridade?: string;
+  }): Promise<{
+    success: boolean;
+    ticket_id: string;
+    already_existed?: boolean;
+    imported_messages?: number;
+    message?: string;
+  }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('import-whatsapp-conversation', {
+        body: params,
+      });
+
+      if (!error && data) {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return data;
+      }
+
+      // Fallback direto via fetch
+      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+      const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseAnonKey) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/import-whatsapp-conversation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${supabaseAnonKey}`,
+            apikey: supabaseAnonKey,
+          },
+          body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+          throw new Error(json.error || `Falha ao importar conversa (${res.status}).`);
+        }
+        return json;
+      }
+
+      throw new Error(error?.message || 'Erro ao importar conversa do WhatsApp.');
+    } catch (err: any) {
+      console.error('[dataService.importWhatsappConversation] Erro:', err);
+      throw err;
     }
   },
 };

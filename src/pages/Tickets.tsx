@@ -1,6 +1,7 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.11.0
- * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência e navegação
+ * TicketFlow - Página "Meus Chamados" v1.12.0
+ * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência,
+ * Importação de conversas ativas do WhatsApp e navegação.
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
 import React, { useEffect, useState } from 'react';
@@ -18,13 +19,15 @@ import {
   User,
   UserCheck,
   Table,
-  LayoutGrid
+  LayoutGrid,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { Ticket, Company, TicketStatus } from '../types/database';
 import { NewTicket } from '../components/NewTicket';
 import { KanbanBoard } from '../components/KanbanBoard';
+import { ImportWhatsappModal } from '../components/ImportWhatsappModal';
 
 interface TicketsProps {
   activeCompany?: Company | null;
@@ -54,8 +57,9 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
     }
   };
 
-  // Modal Novo Chamado
+  // Modal Novo Chamado e Modal de Importação do WhatsApp
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
+  const [isImportWhatsappOpen, setIsImportWhatsappOpen] = useState(false);
 
   const loadTickets = async () => {
     setLoading(true);
@@ -184,6 +188,17 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Atualizar</span>
           </button>
+
+          {profile?.role !== 'Cliente' && (
+            <button
+              type="button"
+              onClick={() => setIsImportWhatsappOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Importar do WhatsApp</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsNewTicketOpen(true)}
@@ -507,6 +522,18 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
         isOpen={isNewTicketOpen}
         onClose={() => setIsNewTicketOpen(false)}
         onTicketCreated={loadTickets}
+      />
+
+      {/* Modal de Importação de Conversa Ativa do WhatsApp */}
+      <ImportWhatsappModal
+        isOpen={isImportWhatsappOpen}
+        onClose={() => setIsImportWhatsappOpen(false)}
+        activeCompany={currentCompany}
+        onImported={(newTicketId) => {
+          setIsImportWhatsappOpen(false);
+          loadTickets();
+          onSelectTicket?.(newTicketId);
+        }}
       />
     </div>
   );
