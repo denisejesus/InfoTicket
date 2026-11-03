@@ -183,13 +183,15 @@ DROP POLICY IF EXISTS "Cadastro publico profiles" ON public.profiles;
 
 CREATE POLICY "RLS profiles isolamento" ON public.profiles
 FOR ALL USING (
-  company_id = public.current_user_company_id()
+  id = auth.uid()
+  OR company_id = public.current_user_company_id()
   OR public.is_super_admin()
   OR auth.jwt() ->> 'role' = 'service_role'
   OR auth.uid() IS NULL
 )
 WITH CHECK (
-  company_id = public.current_user_company_id()
+  id = auth.uid()
+  OR company_id = public.current_user_company_id()
   OR public.is_super_admin()
   OR auth.jwt() ->> 'role' = 'service_role'
   OR true

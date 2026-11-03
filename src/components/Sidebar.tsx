@@ -173,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               TicketFlow Core
             </span>
             <span className="px-1.5 py-0.2 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.10.1
+              v1.10.2
             </span>
           </div>
         </div>

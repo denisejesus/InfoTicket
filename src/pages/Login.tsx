@@ -1,6 +1,7 @@
 /**
- * TicketFlow - Tela de Login v1.2.1
+ * TicketFlow - Tela de Login v1.3.0
  * Autenticação via Supabase Auth com Tema Claro Estrito
+ * Feedback visual integrado para inconsistências de perfil e sessões bloqueadas
  */
 import React, { useState } from 'react';
 import { 
@@ -11,10 +12,11 @@ import {
   AlertCircle, 
   Loader2, 
   Eye, 
-  EyeOff,
-  ShieldCheck
+  EyeOff, 
+  ShieldCheck 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LoginProps {
   onSuccess?: () => void;
@@ -22,6 +24,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) => {
+  const { authError, setAuthError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,6 +34,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setAuthError(null);
 
     if (!email.trim() || !password) {
       setErrorMessage('Por favor, informe seu e-mail e senha.');
@@ -56,6 +60,22 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
       }
 
       if (data.session) {
+        // Validação de segurança imediata de perfil
+        const { data: profileCheck, error: pError } = await supabase
+          .from('profiles')
+          .select('id, role')
+          .eq('id', data.session.user.id)
+          .maybeSingle();
+
+        if (pError || !profileCheck) {
+          const failMsg = pError 
+            ? `Falha de permissão ao consultar perfil: ${pError.message}` 
+            : 'Falha de permissão: Perfil não localizado na base corporativa.';
+          setAuthError(failMsg);
+          await supabase.auth.signOut();
+          throw new Error(failMsg);
+        }
+
         if (onSuccess) {
           onSuccess();
         } else {
@@ -68,6 +88,8 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
       setLoading(false);
     }
   };
+
+  const activeDisplayError = errorMessage || authError;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased text-slate-900">
@@ -87,10 +109,13 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
       {/* Card Principal */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 sm:px-10 shadow-sm border border-slate-200 rounded-2xl">
-          {errorMessage && (
+          {activeDisplayError && (
             <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-800 text-xs font-medium animate-in fade-in duration-200">
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+              <div className="flex-1">
+                <span className="font-bold block">Falha de Autenticação / Permissão</span>
+                <span className="text-rose-700">{activeDisplayError}</span>
+              </div>
             </div>
           )}
 

@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.19.0
+ * Serviço de dados do TicketFlow v1.20.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -28,7 +28,8 @@ export const dataService = {
 
   /**
    * Cria um novo perfil na tabela profiles (RBAC / Gestão de Equipe e Clientes)
-   * Provisiona a credencial de acesso diretamente no Supabase Auth via Service Role (Edge Function)
+   * Provisiona a credencial de acesso diretamente no Supabase Auth via Service Role (Edge Function),
+   * garantindo que o ID de profiles seja estritamente o user_id do auth.users,
    * e dispara a notificação de boas-vindas com a senha real temporária gerada.
    */
   async createProfile(profileData: {
@@ -44,6 +45,26 @@ export const dataService = {
     const rawEmail = profileData.email.trim().toLowerCase();
     const tempPassword = profileData.temporary_password || this.generateSecureTemporaryPassword();
 
+    // 1. Provisiona a credencial de autenticação no Supabase Auth via Edge Function reset-user-password (Service Role)
+    let authUserId: string | null = null;
+    try {
+      console.log(`🔐 Provisionando usuário no Supabase Auth: ${rawEmail}...`);
+      const authRes = await this.resetUserPassword(undefined, tempPassword, rawEmail, {
+        company_id: profileData.company_id,
+        client_organization_id: profileData.client_organization_id || null,
+        nome: profileData.nome.trim(),
+        role: profileData.role,
+        recebe_notificacoes: profileData.recebe_notificacoes,
+      });
+
+      if (authRes?.user?.id) {
+        authUserId = authRes.user.id;
+      }
+    } catch (authErr) {
+      console.warn('Aviso: Falha ao sincronizar senha no Auth via Service Role:', authErr);
+    }
+
+    // 2. Garante o registro e sincronização na tabela public.profiles com o ID estrito do Auth
     const payload: Record<string, any> = {
       company_id: profileData.company_id,
       nome: profileData.nome.trim(),
@@ -53,14 +74,18 @@ export const dataService = {
       recebe_notificacoes: profileData.recebe_notificacoes,
     };
 
+    if (authUserId) {
+      payload.id = authUserId;
+    }
+
     if (profileData.client_organization_id) {
       payload.client_organization_id = profileData.client_organization_id;
     }
 
-    // 1. Cria o registro na tabela public.profiles
+    // Upsert para garantir integridade e vincular estritamente ao user_id de auth.users
     const { data: profileRecord, error } = await supabase
       .from('profiles')
-      .insert(payload)
+      .upsert(payload, { onConflict: authUserId ? 'id' : 'email' })
       .select(`
         *,
         client_organization:client_organizations(id, nome)
@@ -68,17 +93,11 @@ export const dataService = {
       .single();
 
     if (error) {
-      console.error('Erro ao criar perfil:', error.message);
+      console.error('Erro ao registrar perfil:', error.message);
       throw error;
     }
 
-    // 2. Provisiona a credencial de autenticação no Supabase Auth via Edge Function reset-user-password (Service Role)
-    try {
-      console.log(`🔐 Provisionando usuário no Supabase Auth: ${rawEmail}...`);
-      await this.resetUserPassword(profileRecord.id, tempPassword, rawEmail);
-    } catch (authErr) {
-      console.warn('Aviso: Falha ao sincronizar senha no Auth via Service Role:', authErr);
-    }
+    const finalUserId = profileRecord.id;
 
     // 3. Dispara a Edge Function de boas-vindas com a senha temporária real gerada
     try {
@@ -86,7 +105,7 @@ export const dataService = {
         body: {
           event_type: 'welcome_email',
           company_id: profileData.company_id,
-          user_id: profileRecord.id,
+          user_id: finalUserId,
           recipient_email: rawEmail,
           recipient_name: profileData.nome.trim(),
           temp_password: tempPassword,
@@ -136,16 +155,30 @@ export const dataService = {
   },
 
   /**
-   * Invoca a Edge Function reset-user-password para redefinir senha no Supabase Auth
+   * Invoca a Edge Function reset-user-password para redefinir senha no Supabase Auth ou provisionar credencial
    */
-  async resetUserPassword(userId: string, newPassword: string, email?: string): Promise<{ success: boolean; message: string }> {
+  async resetUserPassword(
+    userId?: string,
+    newPassword?: string,
+    email?: string,
+    extraData?: {
+      company_id?: string;
+      client_organization_id?: string | null;
+      nome?: string;
+      role?: string;
+      recebe_notificacoes?: boolean;
+    }
+  ): Promise<{ success: boolean; message: string; user?: { id: string; email: string } }> {
     try {
+      const bodyPayload = {
+        user_id: userId,
+        email: email?.trim().toLowerCase(),
+        new_password: newPassword,
+        ...(extraData || {}),
+      };
+
       const response = await supabase.functions.invoke('reset-user-password', {
-        body: {
-          user_id: userId,
-          email: email?.trim().toLowerCase(),
-          new_password: newPassword,
-        },
+        body: bodyPayload,
       });
 
       const { data, error } = response;
@@ -160,11 +193,7 @@ export const dataService = {
             apikey: anonKey,
             Authorization: `Bearer ${anonKey}`,
           },
-          body: JSON.stringify({
-            user_id: userId,
-            email: email?.trim().toLowerCase(),
-            new_password: newPassword,
-          }),
+          body: JSON.stringify(bodyPayload),
         });
         const resJson = await res.json();
         return resJson;
