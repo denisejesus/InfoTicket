@@ -1,5 +1,5 @@
 /**
- * Modelos TypeScript do Banco de Dados InfoTicket v1.18.1
+ * Modelos TypeScript do Banco de Dados InfoTicket v1.19.0
  */
 
 export type UserRole = 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Operador/Funcionário' | 'Cliente';
@@ -83,6 +83,21 @@ export interface Company {
   smtp_from_name?: string | null;
   criado_em?: string;
   atualizado_em?: string;
+  profiles?: Profile[];
+  contato_nome?: string | null;
+  contato_email?: string | null;
+  contato_whatsapp?: string | null;
+  contato_role?: string | null;
+}
+
+export interface AppNotification {
+  id: string;
+  company_id: string;
+  titulo: 'Novo chamado aberto' | 'Mudança no chamado' | 'Mudança no perfil';
+  mensagem: string;
+  criado_em: string;
+  tipo: 'alerta' | 'info' | 'perfil';
+  ticket_id?: string;
 }
 
 export interface Profile {

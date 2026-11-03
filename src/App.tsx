@@ -1,6 +1,6 @@
 /**
- * TicketFlow - Aplicação Principal v1.7.1
- * Gerenciamento de Rotas Públicas (/login, /register) e Rotas Protegidas com Painel Master Infocast (/admin), RBAC (/usuarios) e Detalhes (/tickets/:id)
+ * TicketFlow - Aplicação Principal v1.8.0
+ * Gerenciamento de Rotas Públicas (/login, /register) e Rotas Protegidas com Painel Master Infocast (/admin), Relatórios (/relatorios), RBAC (/usuarios) e Detalhes (/tickets/:id)
  */
 import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -17,12 +17,14 @@ import { Register } from './pages/Register';
 import { Login } from './pages/Login';
 import { GlobalAdmin } from './pages/GlobalAdmin';
 import { ProfilePage } from './pages/Profile';
+import { ReportsPage } from './pages/Reports';
 
 type AppRoute = 'app' | 'login' | 'register' | 'admin';
 
 function AppContent() {
   const { user, profile, company, signOut } = useAuth();
   const isSuperAdmin = profile?.role === 'Super Admin';
+  const isGestorOuGerente = profile?.role === 'Gestor' || profile?.role === 'Gerente' || isSuperAdmin;
 
   // Helper para normalizar o caminho removendo a base /ticketflow se presente
   const getRelativePath = (fullPath: string) => {
@@ -55,7 +57,11 @@ function AppContent() {
 
   const [currentTab, setCurrentTab] = useState<NavItem>(() => {
     const rel = getRelativePath(window.location.pathname);
-    return rel === '/admin' ? 'administracao-global' : 'painel';
+    if (rel === '/admin') return 'administracao-global';
+    if (rel === '/relatorios' || rel === '/reports') return 'relatorios';
+    if (rel === '/usuarios') return 'usuarios';
+    if (rel === '/settings' || rel === '/configuracoes') return 'configuracoes';
+    return 'painel';
   });
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(() => {
@@ -90,6 +96,9 @@ function AppContent() {
       } else if (rel === '/usuarios') {
         setCurrentRoute('app');
         setCurrentTab('usuarios');
+      } else if (rel === '/relatorios' || rel === '/reports') {
+        setCurrentRoute('app');
+        setCurrentTab('relatorios');
       } else if (rel === '/settings' || rel === '/configuracoes') {
         setCurrentRoute('app');
         setCurrentTab('configuracoes');
@@ -126,9 +135,11 @@ function AppContent() {
       const rel = getRelativePath(window.location.pathname);
       if (tab === 'usuarios' && rel !== '/usuarios') {
         window.history.pushState({}, '', `${base}/usuarios`);
+      } else if (tab === 'relatorios' && rel !== '/relatorios') {
+        window.history.pushState({}, '', `${base}/relatorios`);
       } else if (tab === 'configuracoes' && rel !== '/settings') {
         window.history.pushState({}, '', `${base}/settings`);
-      } else if (tab !== 'usuarios' && tab !== 'configuracoes' && rel !== '/' && rel !== '') {
+      } else if (tab !== 'usuarios' && tab !== 'relatorios' && tab !== 'configuracoes' && rel !== '/' && rel !== '') {
         window.history.pushState({}, '', base ? `${base}/` : '/');
       }
     }
@@ -209,6 +220,12 @@ function AppContent() {
         return <UsersPage activeCompany={company} />;
       case 'clientes':
         return <UsersPage activeCompany={company} />;
+      case 'relatorios':
+        return isGestorOuGerente ? (
+          <ReportsPage activeCompany={company} />
+        ) : (
+          <Dashboard activeCompany={company} onNavigateTab={handleNavigateTab} />
+        );
       case 'configuracoes':
         return <SettingsPage />;
       case 'perfil':

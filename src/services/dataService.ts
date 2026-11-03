@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel } from '../types/database';
+import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.20.0
+ * Serviço de dados do TicketFlow v1.21.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -280,19 +280,216 @@ export const dataService = {
   },
 
   /**
-   * Obtém todas as empresas (Permitido para Super Admin via RLS)
+   * Obtém todas as empresas com os dados de contato do Gestor responsável (Permitido para Super Admin via RLS)
    */
   async getAllCompanies(): Promise<Company[]> {
     const { data, error } = await supabase
       .from('companies')
-      .select('*')
+      .select(`
+        *,
+        profiles(id, company_id, nome, email, whatsapp, role, criado_em)
+      `)
       .order('criado_em', { ascending: false });
 
+    let companiesList: any[] = [];
+    let allProfiles: Profile[] = [];
+
     if (error) {
-      console.error('Erro ao buscar todas as empresas:', error.message);
-      throw error;
+      console.warn('Aviso ao consultar companies com join de profiles, executando busca combinada:', error.message);
+      const { data: fallbackCompanies, error: compErr } = await supabase
+        .from('companies')
+        .select('*')
+        .order('criado_em', { ascending: false });
+
+      if (compErr) {
+        console.error('Erro ao buscar todas as empresas:', compErr.message);
+        throw compErr;
+      }
+      companiesList = fallbackCompanies || [];
+
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, company_id, nome, email, whatsapp, role, criado_em')
+        .order('criado_em', { ascending: true });
+
+      allProfiles = (profilesData as Profile[]) || [];
+    } else {
+      companiesList = data || [];
     }
-    return data || [];
+
+    return companiesList.map((comp) => {
+      const companyProfiles: Profile[] = Array.isArray(comp.profiles)
+        ? comp.profiles
+        : allProfiles.filter((p) => p.company_id === comp.id);
+
+      // Prioriza o perfil com role 'Gestor', depois 'Super Admin', 'Gerente' ou o primeiro usuário vinculado
+      const contactProfile =
+        companyProfiles.find((p) => (p.role || '').toLowerCase() === 'gestor') ||
+        companyProfiles.find((p) => (p.role || '').toLowerCase() === 'super admin') ||
+        companyProfiles.find((p) => (p.role || '').toLowerCase() === 'gerente') ||
+        companyProfiles[0] ||
+        null;
+
+      return {
+        ...comp,
+        profiles: companyProfiles,
+        contato_nome: contactProfile?.nome || null,
+        contato_email: contactProfile?.email || null,
+        contato_whatsapp: contactProfile?.whatsapp || null,
+        contato_role: contactProfile?.role || null,
+      };
+    });
+  },
+
+  /**
+   * Obtém notificações dinâmicas e reais da empresa ativa a partir de audit_logs, tickets e profiles
+   */
+  async getCompanyNotifications(companyId: string, limitCount = 15): Promise<AppNotification[]> {
+    if (!companyId) return [];
+
+    const notificationsMap = new Map<string, AppNotification>();
+
+    try {
+      // 1. Consulta últimos eventos de audit_logs da empresa ativa
+      const { data: auditData } = await supabase
+        .from('audit_logs')
+        .select(`
+          id,
+          company_id,
+          ticket_id,
+          acao,
+          criado_em,
+          user:profiles(id, nome),
+          ticket:tickets(id, assunto)
+        `)
+        .eq('company_id', companyId)
+        .order('criado_em', { ascending: false })
+        .limit(limitCount);
+
+      if (auditData && auditData.length > 0) {
+        auditData.forEach((log: any) => {
+          const shortTicketId = log.ticket_id ? `#${String(log.ticket_id).substring(0, 8)}` : '';
+          const ticketSubject = log.ticket?.assunto ? ` - ${log.ticket.assunto}` : '';
+          const actorName = log.user?.nome ? `${log.user.nome}: ` : '';
+          const acaoLower = String(log.acao || '').toLowerCase();
+
+          const isOpening = acaoLower.includes('abriu o chamado');
+          const titulo: AppNotification['titulo'] = isOpening
+            ? 'Novo chamado aberto'
+            : 'Mudança no chamado';
+
+          const mensagem = isOpening
+            ? `${shortTicketId}${ticketSubject}`
+            : `${shortTicketId}${ticketSubject} • ${actorName}${log.acao}`;
+
+          notificationsMap.set(`audit_${log.id}`, {
+            id: `audit_${log.id}`,
+            company_id: log.company_id,
+            titulo,
+            mensagem,
+            criado_em: log.criado_em,
+            tipo: isOpening ? 'alerta' : 'info',
+            ticket_id: log.ticket_id,
+          });
+        });
+      }
+
+      // 2. Consulta últimos chamados abertos/atualizados na tabela tickets da empresa ativa
+      const { data: recentTickets } = await supabase
+        .from('tickets')
+        .select(`
+          id,
+          company_id,
+          assunto,
+          status,
+          criado_em,
+          atualizado_em,
+          operador:profiles!tickets_operador_id_fkey(id, nome)
+        `)
+        .eq('company_id', companyId)
+        .order('atualizado_em', { ascending: false })
+        .limit(10);
+
+      if (recentTickets && recentTickets.length > 0) {
+        recentTickets.forEach((t: any) => {
+          const shortId = `#${String(t.id).substring(0, 8)}`;
+          const createdMs = t.criado_em ? new Date(t.criado_em).getTime() : 0;
+          const updatedMs = t.atualizado_em ? new Date(t.atualizado_em).getTime() : createdMs;
+          const wasModified = updatedMs - createdMs > 5000 && t.status !== 'Aberto';
+
+          // Evento de abertura real do chamado (caso não exista no audit_log)
+          const hasAuditOpen = Array.from(notificationsMap.values()).some(
+            (n) => n.ticket_id === t.id && n.titulo === 'Novo chamado aberto'
+          );
+          if (!hasAuditOpen && t.criado_em) {
+            notificationsMap.set(`ticket_open_${t.id}`, {
+              id: `ticket_open_${t.id}`,
+              company_id: t.company_id,
+              titulo: 'Novo chamado aberto',
+              mensagem: `${shortId} - ${t.assunto}`,
+              criado_em: t.criado_em,
+              tipo: 'alerta',
+              ticket_id: t.id,
+            });
+          }
+
+          // Evento de mudança no chamado (atualização de status ou atribuição de operador)
+          if (wasModified) {
+            const opInfo = t.operador?.nome ? ` • Responsável: ${t.operador.nome}` : '';
+            const key = `ticket_upd_${t.id}_${t.status}`;
+            if (!notificationsMap.has(key)) {
+              notificationsMap.set(key, {
+                id: key,
+                company_id: t.company_id,
+                titulo: 'Mudança no chamado',
+                mensagem: `${shortId} - ${t.assunto} (Status: ${t.status}${opInfo})`,
+                criado_em: t.atualizado_em || t.criado_em,
+                tipo: 'info',
+                ticket_id: t.id,
+              });
+            }
+          }
+        });
+      }
+
+      // 3. Consulta últimas mudanças/criações na tabela profiles da empresa ativa
+      const { data: recentProfiles } = await supabase
+        .from('profiles')
+        .select('id, company_id, nome, email, role, status, criado_em, atualizado_em')
+        .eq('company_id', companyId)
+        .order('criado_em', { ascending: false })
+        .limit(6);
+
+      if (recentProfiles && recentProfiles.length > 0) {
+        recentProfiles.forEach((p: any) => {
+          const eventDate = p.atualizado_em || p.criado_em;
+          if (!eventDate) return;
+
+          const isUpdated =
+            p.atualizado_em &&
+            p.criado_em &&
+            new Date(p.atualizado_em).getTime() - new Date(p.criado_em).getTime() > 5000;
+
+          const profileIdKey = `profile_${p.id}_${eventDate}`;
+          notificationsMap.set(profileIdKey, {
+            id: profileIdKey,
+            company_id: p.company_id,
+            titulo: 'Mudança no perfil',
+            mensagem: isUpdated
+              ? `Perfil de ${p.nome || p.email} (${p.role}) foi atualizado${p.status ? ` • ${p.status}` : ''}.`
+              : `Novo perfil cadastrado: ${p.nome || p.email} (${p.role}).`,
+            criado_em: eventDate,
+            tipo: 'perfil',
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('Erro ao consultar notificações reais da empresa:', err);
+    }
+
+    return Array.from(notificationsMap.values())
+      .sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
+      .slice(0, limitCount);
   },
 
   /**

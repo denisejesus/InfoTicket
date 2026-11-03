@@ -6,11 +6,12 @@ import {
   Settings, 
   ShieldCheck, 
   Building2,
-  Crown
+  Crown,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export type NavItem = 'painel' | 'meus-chamados' | 'usuarios' | 'clientes' | 'configuracoes' | 'administracao-global' | 'perfil';
+export type NavItem = 'painel' | 'meus-chamados' | 'usuarios' | 'clientes' | 'relatorios' | 'configuracoes' | 'administracao-global' | 'perfil';
 
 interface SidebarProps {
   currentTab: NavItem;
@@ -41,6 +42,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'meus-chamados',
       label: 'Meus Chamados',
       icon: Ticket,
+    },
+    {
+      id: 'relatorios',
+      label: 'Relatórios',
+      icon: BarChart3,
+      visible: isGestorOuGerente,
     },
     {
       id: 'usuarios',
@@ -173,7 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               TicketFlow Core
             </span>
             <span className="px-1.5 py-0.2 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.10.3
+              v1.11.0
             </span>
           </div>
         </div>

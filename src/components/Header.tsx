@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * InfoTicket - Cabeçalho Global & Central de Notificações Reais v1.5.0
+ * Consome eventos dinâmicos reais do Supabase (audit_logs, tickets, profiles) com suporte a Realtime e marcação de leitura
+ */
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Bell, 
   Menu, 
@@ -10,11 +14,14 @@ import {
   UserPlus,
   Building2,
   Check,
-  User as UserIcon
+  User as UserIcon,
+  RefreshCw,
+  Ticket as TicketIcon
 } from 'lucide-react';
-import { Profile, Company } from '../types/database';
+import { Profile, Company, AppNotification } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
+import { supabase } from '../lib/supabase';
 
 import { NavItem } from './Sidebar';
 
@@ -33,13 +40,143 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateRegister,
   onNavigateTab,
 }) => {
-  const { profile, company, activeCompanyId, setActiveCompanyId } = useAuth();
+  const { user, profile, company, activeCompanyId, setActiveCompanyId } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const [companiesList, setCompaniesList] = useState<Company[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+
+  // Estados de Notificações Reais do Banco
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+
+  const targetCompanyId = activeCompanyId || company?.id || profile?.company_id || null;
+  const currentUserId = user?.id || profile?.id || 'anon';
+  const storageKey = `ticketflow_read_notifications_${currentUserId}_${targetCompanyId || 'default'}`;
+
+  // Carrega IDs de notificações já lidas pelo usuário na empresa ativa
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setReadNotificationIds(parsed);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Aviso ao ler estado de notificações lidas:', e);
+    }
+    setReadNotificationIds([]);
+  }, [storageKey]);
+
+  const fetchRealNotifications = useCallback(async () => {
+    if (!targetCompanyId) {
+      setNotifications([]);
+      return;
+    }
+    setLoadingNotifications(true);
+    try {
+      const items = await dataService.getCompanyNotifications(targetCompanyId, 15);
+      setNotifications(items);
+    } catch (err) {
+      console.warn('Erro ao carregar notificações reais:', err);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, [targetCompanyId]);
+
+  // Busca inicial e escuta em tempo real (Realtime) para a empresa ativa
+  useEffect(() => {
+    fetchRealNotifications();
+
+    if (!targetCompanyId) return;
+
+    const channel = supabase
+      .channel(`header-notifications-${targetCompanyId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets', filter: `company_id=eq.${targetCompanyId}` },
+        () => fetchRealNotifications()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'audit_logs', filter: `company_id=eq.${targetCompanyId}` },
+        () => fetchRealNotifications()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${targetCompanyId}` },
+        () => fetchRealNotifications()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [targetCompanyId, fetchRealNotifications]);
+
+  // Marca todas as notificações atuais como lidas e grava a visualização
+  const handleMarkAllAsRead = () => {
+    const allIds = Array.from(new Set([...readNotificationIds, ...notifications.map((n) => n.id)]));
+    setReadNotificationIds(allIds);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(allIds));
+    } catch (e) {
+      console.warn('Erro ao salvar notificações lidas:', e);
+    }
+  };
+
+  // Marca uma notificação individual como lida (e navega caso tenha vínculo)
+  const handleNotificationClick = (notif: AppNotification) => {
+    if (!readNotificationIds.includes(notif.id)) {
+      const updated = [...readNotificationIds, notif.id];
+      setReadNotificationIds(updated);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('Erro ao gravar leitura de notificação:', e);
+      }
+    }
+
+    if (notif.ticket_id) {
+      const base = window.location.pathname.startsWith('/ticketflow') ? '/ticketflow' : '';
+      const targetUrl = `${base}/tickets/${notif.ticket_id}`;
+      window.history.pushState({}, '', targetUrl);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      setShowNotifications(false);
+    } else if (notif.tipo === 'perfil' && onNavigateTab) {
+      onNavigateTab('perfil');
+      setShowNotifications(false);
+    }
+  };
+
+  // Formata data/hora relativa amigável sem dados estáticos
+  const formatRelativeTime = (isoDate: string): string => {
+    if (!isoDate) return '';
+    const diffMs = Date.now() - new Date(isoDate).getTime();
+    const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+    if (diffMinutes < 1) return 'Agora mesmo';
+    if (diffMinutes < 60) return `Há ${diffMinutes} min`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `Há ${diffHours}h`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Ontem';
+    if (diffDays < 7) return `Há ${diffDays} dias`;
+    return new Date(isoDate).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const unreadCount = notifications.filter((n) => !readNotificationIds.includes(n.id)).length;
 
   const handleGlobalSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -70,23 +207,6 @@ export const Header: React.FC<HeaderProps> = ({
         });
     }
   }, [isSuperAdmin]);
-
-  const notifications = [
-    {
-      id: 1,
-      titulo: 'Novo chamado aberto',
-      mensagem: '#TCK-1002 - Falha no upload de comprovantes fiscais',
-      tempo: 'Há 10 min',
-      tipo: 'alerta',
-    },
-    {
-      id: 2,
-      titulo: 'Chamado em atendimento',
-      mensagem: 'Mariana assumiu #TCK-1001',
-      tempo: 'Há 30 min',
-      tipo: 'info',
-    },
-  ];
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 sm:px-6 bg-white border-b border-slate-200">
@@ -190,6 +310,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
         {/* Link / Botão para testar o Onboarding Público */}
         {onNavigateRegister && (
           <button
@@ -201,47 +322,125 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Notificações */}
+        {/* Notificações Reais e Dinâmicas */}
         <div className="relative">
           <button
             onClick={() => {
-              setShowNotifications(!showNotifications);
+              const nextState = !showNotifications;
+              setShowNotifications(nextState);
               setShowUserMenu(false);
+              setShowCompanyMenu(false);
+              if (nextState) {
+                fetchRealNotifications();
+              }
             }}
             aria-label="Notificações"
             className="relative p-2 text-slate-600 rounded-lg hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-none"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {showNotifications && (
             <div className="absolute right-0 w-80 sm:w-96 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Notificações
-                </span>
-                <span className="text-[11px] font-medium text-blue-600 hover:underline cursor-pointer">
-                  Marcar lidas
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Notificações
+                  </span>
+                  {unreadCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
+                      {unreadCount} {unreadCount === 1 ? 'nova' : 'novas'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchRealNotifications}
+                    disabled={loadingNotifications}
+                    title="Atualizar notificações"
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingNotifications ? 'animate-spin text-blue-600' : ''}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMarkAllAsRead}
+                    disabled={notifications.length === 0 || unreadCount === 0}
+                    className={`text-[11px] font-semibold transition-colors ${
+                      unreadCount > 0
+                        ? 'text-blue-600 hover:text-blue-700 hover:underline cursor-pointer'
+                        : 'text-slate-400 cursor-default'
+                    }`}
+                  >
+                    Marcar lidas
+                  </button>
+                </div>
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                {notifications.map((n) => (
-                  <div key={n.id} className="p-3 hover:bg-slate-50 flex items-start gap-3">
-                    <div className="mt-0.5">
-                      {n.tipo === 'alerta' ? (
-                        <AlertCircle className="w-4 h-4 text-amber-500" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-slate-900">{n.titulo}</p>
-                      <p className="text-xs text-slate-600">{n.mensagem}</p>
-                      <span className="text-[10px] text-slate-400 mt-1 block">{n.tempo}</span>
-                    </div>
+
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                {loadingNotifications && notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                    <span>Carregando eventos da empresa...</span>
                   </div>
-                ))}
+                ) : notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500">
+                    <Bell className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+                    <p className="font-semibold text-slate-700">Nenhuma atividade recente</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Novos chamados e atualizações da empresa aparecerão aqui em tempo real.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const isRead = readNotificationIds.includes(n.id);
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => handleNotificationClick(n)}
+                        className={`w-full text-left p-3 hover:bg-slate-50 flex items-start gap-3 transition-all ${
+                          isRead ? 'opacity-60 bg-white' : 'bg-blue-50/25'
+                        }`}
+                      >
+                        <div className="mt-0.5 shrink-0">
+                          {isRead ? (
+                            <CheckCircle2 className="w-4 h-4 text-slate-400" />
+                          ) : n.tipo === 'alerta' ? (
+                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                          ) : n.tipo === 'perfil' ? (
+                            <UserIcon className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <TicketIcon className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-xs ${isRead ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}`}>
+                              {n.titulo}
+                            </p>
+                            {!isRead && (
+                              <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 break-words leading-snug mt-0.5">
+                            {n.mensagem}
+                          </p>
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            {formatRelativeTime(n.criado_em)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -255,6 +454,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => {
               setShowUserMenu(!showUserMenu);
               setShowNotifications(false);
+              setShowCompanyMenu(false);
             }}
             className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-slate-100 transition-colors focus:outline-none"
           >
@@ -272,10 +472,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <div className="hidden sm:block text-left">
               <div className="text-xs font-semibold text-slate-900 leading-tight">
-                {currentUser?.nome || 'Carlos Eduardo Santana'}
+                {currentUser?.nome || profile?.nome || 'Usuário Autenticado'}
               </div>
               <div className="text-[11px] font-medium text-slate-500">
-                {currentUser?.role || 'Gestor'}
+                {currentUser?.role || profile?.role || ''}
               </div>
             </div>
 
@@ -286,8 +486,8 @@ export const Header: React.FC<HeaderProps> = ({
           {showUserMenu && (
             <div className="absolute right-0 w-52 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50">
               <div className="px-4 py-2 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-900">{currentUser?.nome}</p>
-                <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
+                <p className="text-xs font-bold text-slate-900">{currentUser?.nome || profile?.nome}</p>
+                <p className="text-[11px] text-slate-500 truncate">{currentUser?.email || profile?.email}</p>
               </div>
 
               {onNavigateTab && (
