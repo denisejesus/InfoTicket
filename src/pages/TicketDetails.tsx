@@ -39,7 +39,8 @@ import {
   Layers,
   Eye,
   EyeOff,
-  ShieldAlert
+  ShieldAlert,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -840,203 +841,223 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
       </div>
 
-      {/* Cartão de Informações Principais do Chamado */}
-      <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded">
-                #{ticket.id.substring(0, 8)}
-              </span>
+      {/* Cartão de Informações Principais do Chamado (B2B Corporativo - Estilo Zendesk / Jira) */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        {/* Topo do Header: Título em Destaque e Identificador */}
+        <div className="p-6 border-b border-slate-100 space-y-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded">
+              #{ticket.id.substring(0, 8)}
+            </span>
 
-              {/* Status Badge & Dropdown */}
-              {profile?.role !== 'Cliente' && !isFechado ? (
-                <div className="relative inline-flex items-center">
-                  <select
-                    value={ticket.status}
-                    disabled={updatingStatus}
-                    onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
-                    className={`text-xs font-semibold rounded-lg pl-2.5 pr-7 py-1 border transition-all appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-xs ${
-                      ticket.status === 'Aberto'
-                        ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
-                        : ticket.status === 'Em Andamento'
-                        ? 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-                        : ticket.status === 'Aguardando Cliente'
-                        ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                    }`}
-                    title="Alterar status do chamado"
-                  >
-                    <option value="Aberto">Status: Aberto</option>
-                    <option value="Em Andamento">Status: Em Atendimento</option>
-                    <option value="Aguardando Cliente">Status: Aguardando Cliente</option>
-                    <option value="Fechado">Status: Fechar Chamado...</option>
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 pointer-events-none" />
-                </div>
-              ) : (
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+            {/* Status Dropdown / Badge */}
+            {profile?.role !== 'Cliente' && !isFechado ? (
+              <div className="relative inline-flex items-center">
+                <select
+                  value={ticket.status}
+                  disabled={updatingStatus}
+                  onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
+                  className={`text-xs font-bold rounded-lg pl-3 pr-8 py-1 border transition-all appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-xs ${
                     ticket.status === 'Aberto'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
                       : ticket.status === 'Em Andamento'
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      ? 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
                       : ticket.status === 'Aguardando Cliente'
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : ticket.status === 'Fechado'
-                      ? 'bg-slate-100 text-slate-700 border-slate-300'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                   }`}
+                  title="Alterar status do chamado"
                 >
-                  {ticket.status === 'Fechado' ? (
-                    <CheckCheck className="w-3.5 h-3.5 text-slate-500" />
-                  ) : ticket.status === 'Resolvido' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Clock className="w-3.5 h-3.5 text-blue-500" />
-                  )}
-                  {ticket.status}
-                </span>
-              )}
-
-              {/* Prioridade */}
-              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
-                Prioridade: {ticket.prioridade || 'Média'}
+                  <option value="Aberto">Status: Aberto</option>
+                  <option value="Em Andamento">Status: Em Atendimento</option>
+                  <option value="Aguardando Cliente">Status: Aguardando Cliente</option>
+                  <option value="Fechado">Status: Fechar Chamado...</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 pointer-events-none" />
+              </div>
+            ) : (
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${
+                  ticket.status === 'Aberto'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : ticket.status === 'Em Andamento'
+                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                    : ticket.status === 'Aguardando Cliente'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : ticket.status === 'Fechado'
+                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
+                {ticket.status === 'Fechado' ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-slate-500" />
+                ) : ticket.status === 'Resolvido' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                )}
+                <span>{ticket.status}</span>
               </span>
-
-              {/* SLA Badge */}
-              {isFechado ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                  SLA: Concluído
-                </span>
-              ) : ticket.sla_vencimento ? (() => {
-                const now = new Date();
-                const slaDate = new Date(ticket.sla_vencimento);
-                const diffMs = slaDate.getTime() - now.getTime();
-                const diffHours = diffMs / (1000 * 60 * 60);
-
-                if (diffMs <= 0) {
-                  return (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                      <AlertCircle className="w-3 h-3 text-rose-600" />
-                      SLA Vencido
-                    </span>
-                  );
-                } else if (diffHours <= 2) {
-                  return (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock className="w-3 h-3 text-amber-600" />
-                      SLA Atenção (&lt; 2h)
-                    </span>
-                  );
-                } else {
-                  return (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      SLA no Prazo (~{Math.round(diffHours)}h)
-                    </span>
-                  );
-                }
-              })() : null}
-            </div>
-
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              {ticket.assunto}
-            </h1>
-          </div>
-
-          {/* Metadados adicionais com Seletor de Responsável (RBAC) */}
-          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-            {/* Solicitante e Organização */}
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Solicitante</span>
-              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                <User className="w-3.5 h-3.5 text-slate-400" />
-                <span>{ticket.cliente?.nome || 'Cliente do Tenant'}</span>
-              </div>
-              {ticket.client_organization?.nome && (
-                <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium mt-0.5">
-                  <Building2 className="w-3 h-3 text-blue-500" />
-                  <span>{ticket.client_organization.nome}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Componente Responsável (RBAC):
-                a) Se Gestor/Gerente/Super Admin: Dropdown de seleção de operadores/gerentes/gestores
-                b) Se Operador: Botão "Assumir Chamado" (se não for ele) ou dropdown para transferir
-                c) Se Cliente: Oculto completamente
-            */}
-            {!isCliente && (
-              <div className="border-l border-slate-200 pl-4 py-0.5">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-                  Responsável
-                </span>
-
-                {['Gestor', 'Gerente', 'Super Admin'].includes(profile?.role || '') ? (
-                  /* Gestor / Gerente: Dropdown para listar e atribuir operadores da empresa */
-                  <div className="relative inline-block">
-                    <select
-                      value={ticket.operador_id || ''}
-                      disabled={assigningOperator}
-                      onChange={(e) => handleAssignOperator(e.target.value ? e.target.value : null)}
-                      className="text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer disabled:opacity-50"
-                    >
-                      <option value="">Não Atribuído</option>
-                      {staffUsers.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.nome} ({staff.role})
-                        </option>
-                      ))}
-                    </select>
-                    {assigningOperator && (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 absolute right-2 top-2 pointer-events-none" />
-                    )}
-                  </div>
-                ) : profile?.role === 'Operador' ? (
-                  /* Operador: Se não for ele o responsável, botão "Assumir Chamado" ou dropdown de transferência */
-                  <div className="flex items-center gap-2">
-                    {ticket.operador_id !== user?.id && (
-                      <button
-                        type="button"
-                        disabled={assigningOperator}
-                        onClick={() => handleAssignOperator(user?.id || null)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors disabled:opacity-50"
-                      >
-                        {assigningOperator ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <UserCheck className="w-3.5 h-3.5" />
-                        )}
-                        <span>Assumir Chamado</span>
-                      </button>
-                    )}
-
-                    {/* Dropdown opcional para transferir para outro colega */}
-                    <div className="relative inline-block">
-                      <select
-                        value={ticket.operador_id || ''}
-                        disabled={assigningOperator}
-                        onChange={(e) => handleAssignOperator(e.target.value ? e.target.value : null)}
-                        className="text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer disabled:opacity-50"
-                      >
-                        <option value="">Transferir para...</option>
-                        {staffUsers.map((staff) => (
-                          <option key={staff.id} value={staff.id}>
-                            {staff.nome} {staff.id === user?.id ? '(Você)' : `(${staff.role})`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             )}
 
-            {/* Criado em */}
-            <div className="border-l border-slate-200 pl-4">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Criado em</span>
-              <span className="font-medium text-slate-700">
+            {/* Prioridade Badge */}
+            <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+              Prioridade: <strong className="text-slate-800">{ticket.prioridade || 'Média'}</strong>
+            </span>
+
+            {/* SLA Badge */}
+            {isFechado ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                SLA: Concluído
+              </span>
+            ) : ticket.sla_vencimento ? (() => {
+              const now = new Date();
+              const slaDate = new Date(ticket.sla_vencimento);
+              const diffMs = slaDate.getTime() - now.getTime();
+              const diffHours = diffMs / (1000 * 60 * 60);
+
+              if (diffMs <= 0) {
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                    SLA Vencido
+                  </span>
+                );
+              } else if (diffHours <= 2) {
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    SLA Atenção (&lt; 2h)
+                  </span>
+                );
+              } else {
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    SLA no Prazo (~{Math.round(diffHours)}h)
+                  </span>
+                );
+              }
+            })() : null}
+          </div>
+
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+            {ticket.assunto}
+          </h1>
+        </div>
+
+        {/* Grid Horizontal de Metadados Corporativos (Solicitante, Responsável, Organização, Data) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-5 bg-slate-50/70 border-b border-slate-200/80 text-xs">
+          {/* Solicitante */}
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+              Solicitante
+            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[10px]">
+                {ticket.cliente?.nome?.charAt(0).toUpperCase() || 'C'}
+              </div>
+              <span className="font-semibold text-slate-900 truncate">
+                {ticket.cliente?.nome || 'Cliente'}
+              </span>
+            </div>
+            {ticket.cliente?.email && (
+              <span className="text-[11px] text-slate-500 block truncate">
+                {ticket.cliente.email}
+              </span>
+            )}
+          </div>
+
+          {/* Organização / Empresa Cliente */}
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+              Organização
+            </span>
+            <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="truncate">
+                {ticket.client_organization?.nome || 'Geral'}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500 block">Cliente Corporativo</span>
+          </div>
+
+          {/* Responsável (Atribuição RBAC) */}
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+              Responsável
+            </span>
+            {!isCliente ? (
+              ['Gestor', 'Gerente', 'Super Admin'].includes(profile?.role || '') ? (
+                <div className="relative inline-block w-full">
+                  <select
+                    value={ticket.operador_id || ''}
+                    disabled={assigningOperator}
+                    onChange={(e) => handleAssignOperator(e.target.value ? e.target.value : null)}
+                    className="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer disabled:opacity-50 truncate"
+                  >
+                    <option value="">Não Atribuído</option>
+                    {staffUsers.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.nome} ({staff.role})
+                      </option>
+                    ))}
+                  </select>
+                  {assigningOperator && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 absolute right-2 top-2 pointer-events-none" />
+                  )}
+                </div>
+              ) : profile?.role === 'Operador' ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {ticket.operador_id !== user?.id && (
+                    <button
+                      type="button"
+                      disabled={assigningOperator}
+                      onClick={() => handleAssignOperator(user?.id || null)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50"
+                    >
+                      {assigningOperator ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <UserCheck className="w-3 h-3" />
+                      )}
+                      <span>Assumir</span>
+                    </button>
+                  )}
+                  <select
+                    value={ticket.operador_id || ''}
+                    disabled={assigningOperator}
+                    onChange={(e) => handleAssignOperator(e.target.value ? e.target.value : null)}
+                    className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 pr-6 focus:outline-none cursor-pointer disabled:opacity-50 truncate max-w-[150px]"
+                  >
+                    <option value="">Transferir...</option>
+                    {staffUsers.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.nome} {staff.id === user?.id ? '(Você)' : `(${staff.role})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <span className="font-semibold text-slate-900 block truncate">
+                  {ticket.operador?.nome || 'Não atribuído'}
+                </span>
+              )
+            ) : (
+              <span className="font-semibold text-slate-900 block truncate">
+                {ticket.operador?.nome || 'Equipe de Atendimento'}
+              </span>
+            )}
+          </div>
+
+          {/* Criado em & Prazos */}
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+              Abertura & SLA
+            </span>
+            <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>
                 {new Date(ticket.criado_em).toLocaleDateString('pt-BR', {
                   day: '2-digit',
                   month: '2-digit',
@@ -1046,27 +1067,32 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 })}
               </span>
             </div>
+            {ticket.sla_vencimento && (
+              <span className="text-[11px] text-slate-500 block">
+                Prazo: {new Date(ticket.sla_vencimento).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Descrição Inicial */}
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm text-slate-800 leading-relaxed space-y-3">
-          <div>
-            <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block mb-1">
-              Descrição Inicial
-            </span>
-            <p className="whitespace-pre-wrap">{ticket.descricao}</p>
+        {/* Descrição Inicial do Chamado */}
+        <div className="p-6 space-y-3">
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block">
+            Descrição Inicial do Problema
+          </span>
+          <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-sans">
+            {ticket.descricao}
           </div>
 
           {/* Anexos da Abertura do Chamado (message_id is null) */}
           {ticketAttachments.filter((att) => !att.message_id).length > 0 && (
-            <div className="pt-2 border-t border-slate-200/80">
-              <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1 mb-2">
+            <div className="pt-3 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2">
                 <Paperclip className="w-3.5 h-3.5 text-slate-400" />
                 <span>Anexos da Abertura ({ticketAttachments.filter((att) => !att.message_id).length})</span>
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                 {ticketAttachments
                   .filter((att) => !att.message_id)
                   .map((att) => {
@@ -1096,7 +1122,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                           </a>
                         ) : null}
 
-                        <div className="p-2 flex items-center justify-between gap-2">
+                        <div className="p-2.5 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 truncate">
                             {isImg ? (
                               <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -1120,7 +1146,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                           </a>
                         </div>
                         {sizeKb && (
-                          <div className="px-2 pb-1.5 text-[10px] text-slate-400">
+                          <div className="px-2.5 pb-1.5 text-[10px] text-slate-400">
                             {sizeKb} KB
                           </div>
                         )}
@@ -1275,12 +1301,12 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         )}
       </div>
 
-      {/* LINHA DO TEMPO (Timeline com Auditoria e Mensagens) */}
+      {/* LINHA DO TEMPO (FEED VERTICAL CORPORATIVO - ESTILO ZENDESK / JIRA) */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-blue-600" />
-            <h2 className="text-base font-bold text-slate-900">Linha do Tempo & Interações</h2>
+            <MessageSquare className="w-4 h-4 text-slate-700" />
+            <h2 className="text-base font-bold text-slate-900 tracking-tight">Histórico de Mensagens & Atividades</h2>
           </div>
           
           <div className="flex items-center gap-2">
@@ -1298,31 +1324,32 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 {showTechnicalLogs ? (
                   <>
                     <EyeOff className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Ocultar Logs de Sistema ({technicalLogsCount})</span>
+                    <span>Ocultar Logs ({technicalLogsCount})</span>
                   </>
                 ) : (
                   <>
                     <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Auditoria Técnica ({technicalLogsCount})</span>
+                    <span>Logs Técnicos ({technicalLogsCount})</span>
                   </>
                 )}
               </button>
             )}
             <span className="text-xs text-slate-500 font-medium">
-              {timelineItems.length} {timelineItems.length === 1 ? 'evento' : 'eventos'}
+              {timelineItems.length} {timelineItems.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
         </div>
 
         {timelineItems.length === 0 ? (
-          <div className="p-8 text-center bg-white border border-slate-200 rounded-xl shadow-sm text-xs text-slate-500">
+          <div className="p-8 text-center bg-white border border-slate-200 rounded-xl shadow-xs text-xs text-slate-500">
             <MessageSquare className="w-8 h-8 mx-auto text-slate-300 mb-2" />
             <p className="font-semibold text-slate-700">Nenhuma interação registrada ainda.</p>
-            <p className="mt-0.5">Utilize o formulário abaixo para enviar a primeira resposta.</p>
+            <p className="mt-0.5">Utilize o formulário abaixo para registrar a primeira resposta.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {timelineItems.map((item) => {
+              // Divisor de Auditoria Técnica / Ação do Sistema
               if (item.type === 'audit') {
                 const log = item.data;
                 const horaFormatada = new Date(log.criado_em).toLocaleTimeString('pt-BR', {
@@ -1337,26 +1364,26 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 const isTech = item.isTechnical;
 
                 return (
-                  <div key={`audit-${log.id}`} className="flex items-center justify-center my-2">
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-xs border ${
+                  <div key={`audit-${log.id}`} className="flex items-center justify-center my-3">
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs shadow-2xs border ${
                       isTech
                         ? 'bg-amber-50/90 border-amber-200 text-amber-800'
-                        : 'bg-slate-100/90 border border-slate-200/80 text-slate-500'
+                        : 'bg-slate-100/80 border border-slate-200 text-slate-500'
                     }`}>
                       {isTech ? (
-                        <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <Activity className="w-3 h-3 text-slate-400 shrink-0" />
+                        <Activity className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       )}
                       <span>
-                        <strong className="text-slate-700 font-semibold">{log.user?.nome || 'Sistema'}</strong>{' '}
-                        {log.acao} às {horaFormatada} ({dataFormatada})
+                        <strong className="text-slate-700 font-semibold">{log.user?.nome || 'Sistema'}</strong>: {log.acao} às {horaFormatada} ({dataFormatada})
                       </span>
                     </div>
                   </div>
                 );
               }
 
+              // Divisor de Mudança de Status / Eventos de Sistema
               if (item.type === 'system_event') {
                 const horaFormatada = new Date(item.timestamp).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
@@ -1368,195 +1395,195 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 });
 
                 return (
-                  <div key={`sysevt-${item.timestamp}-${item.text.slice(0, 15)}`} className="flex items-center justify-center my-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-xs border bg-slate-50 border-slate-200 text-slate-600">
-                      <Activity className="w-3 h-3 text-blue-500 shrink-0" />
+                  <div key={`sysevt-${item.timestamp}-${item.text.slice(0, 15)}`} className="flex items-center justify-center my-3">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs shadow-2xs border bg-slate-50 border-slate-200 text-slate-500">
+                      <Activity className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       <span>
-                        <strong className="text-slate-800 font-semibold">{item.user}</strong>: {item.text} às {horaFormatada} ({dataFormatada})
+                        <strong className="text-slate-700 font-semibold">{item.user}</strong>: {item.text} às {horaFormatada} ({dataFormatada})
                       </span>
                     </div>
                   </div>
                 );
               }
 
+              // Mensagem Real (Card Corporativo 100% à Esquerda)
               const msg = item.data;
               const isWhisper = msg.is_internal_note;
-              const isSenderMe = msg.user_id === user?.id;
-              // Determina se a mensagem é do cliente (lado esquerdo) ou do operador/agente (lado direito)
               const isClientSender = msg.user?.role === 'Cliente' || msg.user_id === ticket?.cliente_id;
+              const isSenderMe = msg.user_id === user?.id;
 
               return (
                 <div
                   key={`msg-${msg.id}`}
-                  className={`flex flex-col transition-all my-2 ${
+                  className={`w-full rounded-xl border transition-all overflow-hidden shadow-xs ${
                     isWhisper
-                      ? 'w-full'
+                      ? 'bg-amber-50/50 border-amber-200/90'
                       : isClientSender
-                      ? 'items-start mr-8 sm:mr-24'
-                      : 'items-end ml-8 sm:ml-24'
+                      ? 'bg-white border-slate-200'
+                      : 'bg-slate-50/90 border-slate-200'
                   }`}
                 >
-                  <div
-                    className={`w-fit max-w-xl p-4 rounded-2xl border shadow-sm transition-all ${
-                      isWhisper
-                        ? 'bg-amber-50/80 border-amber-200 text-amber-900 w-full'
-                        : isClientSender
-                        ? 'bg-white border-slate-200 text-slate-900 rounded-tl-xs'
-                        : 'bg-blue-50/80 border-blue-200 text-slate-900 rounded-tr-xs'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                            isWhisper
-                              ? 'bg-amber-200 text-amber-800'
-                              : isClientSender
-                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                              : 'bg-blue-600 text-white shadow-xs'
-                          }`}
-                        >
-                          {msg.user?.nome?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-xs text-slate-900">
-                              {msg.user?.nome || 'Usuário'}
-                            </span>
-                            {msg.user?.role && (
-                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
-                                isClientSender
-                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                  : 'bg-blue-100 text-blue-700 border-blue-200'
-                              }`}>
-                                {msg.user.role}
-                              </span>
-                            )}
-                            {isSenderMe && (
-                              <span className="text-[10px] font-bold text-blue-600">(Você)</span>
-                            )}
-                          </div>
-                        </div>
+                  {/* Cabeçalho Interno do Card da Mensagem */}
+                  <div className={`p-3.5 sm:px-4 sm:py-3 border-b flex flex-wrap items-center justify-between gap-2.5 ${
+                    isWhisper
+                      ? 'bg-amber-100/40 border-amber-200/60'
+                      : isClientSender
+                      ? 'bg-slate-50/60 border-slate-100'
+                      : 'bg-slate-100/60 border-slate-200/60'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                          isWhisper
+                            ? 'bg-amber-200 text-amber-900'
+                            : isClientSender
+                            ? 'bg-slate-200 text-slate-700'
+                            : 'bg-blue-600 text-white'
+                        }`}
+                      >
+                        {msg.user?.nome?.charAt(0).toUpperCase() || 'U'}
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Badge de Canal Omnichannel */}
-                        {!isWhisper && msg.channel && (
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                              msg.channel === 'whatsapp'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : msg.channel === 'email'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
-                          >
-                            {msg.channel === 'whatsapp' ? (
-                              <>
-                                <Phone className="w-2.5 h-2.5 text-emerald-600" />
-                                <span>WhatsApp</span>
-                              </>
-                            ) : msg.channel === 'email' ? (
-                              <>
-                                <Mail className="w-2.5 h-2.5 text-blue-600" />
-                                <span>E-mail</span>
-                              </>
-                            ) : (
-                              <span>Sistema</span>
-                            )}
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-xs text-slate-900">
+                            {msg.user?.nome || 'Usuário'}
                           </span>
-                        )}
-
-                        {/* Badge de Nota Interna */}
-                        {isWhisper && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
-                            <Lock className="w-3 h-3 text-amber-800" />
-                            Nota Interna
-                          </span>
-                        )}
-                        <span className="text-[11px] text-slate-400">
-                          {new Date(msg.created_at).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                          {msg.user?.role && (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              isClientSender
+                                ? 'bg-white text-slate-600 border-slate-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                              {msg.user.role}
+                            </span>
+                          )}
+                          {isSenderMe && (
+                            <span className="text-[10px] font-bold text-blue-600">(Você)</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <p className="text-xs leading-relaxed whitespace-pre-wrap pl-9">
-                      {msg.content}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      {/* Badge de Canal Omnichannel */}
+                      {!isWhisper && msg.channel && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            msg.channel === 'whatsapp'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : msg.channel === 'email'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-white text-slate-600 border-slate-200'
+                          }`}
+                        >
+                          {msg.channel === 'whatsapp' ? (
+                            <>
+                              <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                              <span>WhatsApp</span>
+                            </>
+                          ) : msg.channel === 'email' ? (
+                            <>
+                              <Mail className="w-2.5 h-2.5 text-blue-600" />
+                              <span>E-mail</span>
+                            </>
+                          ) : (
+                            <span>Sistema</span>
+                          )}
+                        </span>
+                      )}
 
-                    {/* Anexos vinculados à mensagem (Fase 13) */}
-                    {ticketAttachments.filter((att) => att.message_id === msg.id).length > 0 && (
-                      <div className="pl-9 pt-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                          {ticketAttachments
-                            .filter((att) => att.message_id === msg.id)
-                            .map((att) => {
-                              const isImg = att.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name);
-                              const sizeKb = att.file_size ? Math.round(att.file_size / 1024) : null;
+                      {/* Badge de Nota Interna */}
+                      {isWhisper && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
+                          <Lock className="w-3 h-3 text-amber-800" />
+                          Nota Interna
+                        </span>
+                      )}
 
-                              return (
-                                <div
-                                  key={att.id}
-                                  className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:border-blue-300 transition-all group"
-                                >
-                                  {isImg ? (
-                                    <a
-                                      href={att.file_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="h-24 bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100 relative group-hover:opacity-95"
-                                    >
-                                      <img
-                                        src={att.file_url}
-                                        alt={att.file_name}
-                                        className="w-full h-full object-cover"
-                                      />
-                                      <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
-                                        <ExternalLink className="w-4 h-4 text-white drop-shadow-md" />
-                                      </div>
-                                    </a>
-                                  ) : null}
-
-                                  <div className="p-2 flex items-center justify-between gap-1.5">
-                                    <div className="flex items-center gap-1.5 truncate">
-                                      {isImg ? (
-                                        <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                      ) : (
-                                        <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                      )}
-                                      <span className="text-[11px] font-semibold text-slate-800 truncate" title={att.file_name}>
-                                        {att.file_name}
-                                      </span>
-                                    </div>
-
-                                    <a
-                                      href={att.file_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      download={att.file_name}
-                                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors shrink-0"
-                                      title="Baixar anexo"
-                                    >
-                                      <Download className="w-3 h-3" />
-                                    </a>
-                                  </div>
-                                  {sizeKb && (
-                                    <div className="px-2 pb-1 text-[9px] text-slate-400">
-                                      {sizeKb} KB
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
+                      <span className="text-[11px] font-medium text-slate-500">
+                        {new Date(msg.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Corpo da Mensagem com Tipografia Corporativa */}
+                  <div className="p-4 sm:p-5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-sans">
+                    {msg.content}
+                  </div>
+
+                  {/* Anexos vinculados à mensagem (Fase 13) */}
+                  {ticketAttachments.filter((att) => att.message_id === msg.id).length > 0 && (
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-slate-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-3">
+                        {ticketAttachments
+                          .filter((att) => att.message_id === msg.id)
+                          .map((att) => {
+                            const isImg = att.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file_name);
+                            const sizeKb = att.file_size ? Math.round(att.file_size / 1024) : null;
+
+                            return (
+                              <div
+                                key={att.id}
+                                className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden shadow-2xs hover:border-blue-300 transition-all group"
+                              >
+                                {isImg ? (
+                                  <a
+                                    href={att.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="h-28 bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100 relative group-hover:opacity-95"
+                                  >
+                                    <img
+                                      src={att.file_url}
+                                      alt={att.file_name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                      <ExternalLink className="w-5 h-5 text-white drop-shadow-md" />
+                                    </div>
+                                  </a>
+                                ) : null}
+
+                                <div className="p-2 flex items-center justify-between gap-1.5">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    {isImg ? (
+                                      <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    )}
+                                    <span className="text-[11px] font-semibold text-slate-800 truncate" title={att.file_name}>
+                                      {att.file_name}
+                                    </span>
+                                  </div>
+
+                                  <a
+                                    href={att.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={att.file_name}
+                                    className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors shrink-0"
+                                    title="Baixar anexo"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </a>
+                                </div>
+                                {sizeKb && (
+                                  <div className="px-2 pb-1 text-[9px] text-slate-400">
+                                    {sizeKb} KB
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1564,21 +1591,24 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         )}
       </div>
 
-      {/* FORMULÁRIO DE INTERAÇÃO / NOVA RESPOSTA (OMNICHANNEL & MACROS) */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <span className="text-sm font-bold text-slate-900">Responder ao Chamado</span>
+      {/* FORMULÁRIO DE INTERAÇÃO / NOVA RESPOSTA (CORPORATIVO B2B) */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Send className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-bold text-slate-900">Responder ao Chamado</h3>
+          </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Botão Inserir Template / Modelo de Resposta (Fase 14.1) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Botão Inserir Template / Modelo de Resposta */}
             {!isCliente && (
               <button
                 type="button"
                 onClick={handleOpenTemplates}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs"
                 title="Inserir modelo da tabela de templates de comunicação da empresa"
               >
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <FileText className="w-3.5 h-3.5 text-slate-500" />
                 <span>Usar Modelo</span>
               </button>
             )}
@@ -1588,24 +1618,24 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               <button
                 type="button"
                 onClick={handleOpenMacros}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs"
                 title="Inserir resposta rápida cadastrada"
               >
                 <Zap className="w-3.5 h-3.5 text-purple-600" />
-                <span>Respostas Rápidas (Macros)</span>
+                <span>Respostas Rápidas</span>
               </button>
             )}
 
             {/* Checkbox Nota Interna */}
             {!isCliente && (
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold select-none text-slate-700 ml-auto">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none text-slate-700 ml-2 py-1 px-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
                 <input
                   type="checkbox"
                   checked={isInternalNote}
                   onChange={(e) => setIsInternalNote(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
                 />
-                <span className={`flex items-center gap-1 ${isInternalNote ? 'text-amber-700 font-bold' : ''}`}>
+                <span className={`flex items-center gap-1 ${isInternalNote ? 'text-amber-800 font-bold' : ''}`}>
                   <Lock className="w-3.5 h-3.5 text-amber-600" />
                   Nota Interna
                 </span>
@@ -1614,108 +1644,54 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
           </div>
         </div>
 
-        {/* SELETOR OMNICHANNEL OBRIGATÓRIO (RADIO GROUP / TOGGLE BUTTONS) */}
+        {/* SELETOR DE CANAL ENXUTO E COMPACTO */}
         {!isCliente && !isInternalNote && (
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Canal de Envio Omnichannel <span className="text-rose-500">*</span>
-              </label>
-              <span className="text-[11px] font-medium text-slate-500">
-                {hasChatwootConfig ? 'Integração WhatsApp ativa' : 'WhatsApp não configurado'}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
+                Canal de Envio:
               </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Opção 1: E-mail */}
-              <button
-                type="button"
-                onClick={() => setSelectedChannel('email')}
-                className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                  selectedChannel === 'email'
-                    ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 shadow-xs'
-                    : 'bg-white border-slate-200 hover:bg-slate-50/80 hover:border-slate-300'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                    selectedChannel === 'email'
-                      ? 'border-blue-600 bg-blue-600'
-                      : 'border-slate-300 bg-white'
-                  }`}
-                >
-                  {selectedChannel === 'email' && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                  )}
-                </div>
-                <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700 shrink-0">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <div className="text-xs font-bold text-slate-900 leading-tight">
-                    Responder via E-mail
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    Notificação automática por correio eletrônico
-                  </div>
-                </div>
-              </button>
-
-              {/* Opção 2: WhatsApp */}
-              {hasChatwootConfig ? (
+              <div className="inline-flex p-0.5 bg-white border border-slate-200 rounded-lg shadow-2xs">
                 <button
                   type="button"
-                  onClick={() => setSelectedChannel('whatsapp')}
-                  className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                    selectedChannel === 'whatsapp'
-                      ? 'bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-500/20 shadow-xs'
-                      : 'bg-white border-slate-200 hover:bg-slate-50/80 hover:border-slate-300'
+                  onClick={() => setSelectedChannel('email')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    selectedChannel === 'email'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                      selectedChannel === 'whatsapp'
-                        ? 'border-emerald-600 bg-emerald-600'
-                        : 'border-slate-300 bg-white'
-                    }`}
-                  >
-                    {selectedChannel === 'whatsapp' && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    )}
-                  </div>
-                  <div className="p-2 rounded-lg bg-emerald-100/70 text-emerald-700 shrink-0">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <div className="truncate">
-                    <div className="text-xs font-bold text-slate-900 leading-tight">
-                      Responder via WhatsApp
-                    </div>
-                    <div className="text-[11px] text-emerald-700 font-medium">
-                      Disparo instantâneo oficial
-                    </div>
-                  </div>
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>E-mail</span>
                 </button>
-              ) : (
-                <div
-                  title="WhatsApp não configurado para esta empresa"
-                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed select-none opacity-70"
+
+                <button
+                  type="button"
+                  disabled={!hasChatwootConfig}
+                  onClick={() => setSelectedChannel('whatsapp')}
+                  title={!hasChatwootConfig ? 'WhatsApp não configurado' : 'Disparo via WhatsApp'}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    !hasChatwootConfig
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : selectedChannel === 'whatsapp'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  <div className="w-4 h-4 rounded-full border border-slate-300 bg-slate-200 shrink-0" />
-                  <div className="p-2 rounded-lg bg-slate-200 text-slate-400 shrink-0">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <div className="truncate">
-                    <div className="text-xs font-bold text-slate-500 leading-tight flex items-center gap-1.5">
-                      <span>Responder via WhatsApp</span>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
-                        Inativo
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 truncate" title="WhatsApp não configurado para esta empresa">
-                      WhatsApp não configurado para esta empresa
-                    </div>
-                  </div>
-                </div>
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-500">
+              {hasChatwootConfig ? (
+                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  WhatsApp Ativo
+                </span>
+              ) : (
+                <span className="text-slate-400">WhatsApp Inativo para esta empresa</span>
               )}
             </div>
           </div>
