@@ -730,7 +730,8 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   // Unifica mensagens visíveis e logs de auditoria em uma linha do tempo cronológica
   type TimelineItem = 
     | { type: 'message'; data: TicketMessage; timestamp: string }
-    | { type: 'audit'; data: AuditLog; timestamp: string; isTechnical: boolean };
+    | { type: 'audit'; data: AuditLog; timestamp: string; isTechnical: boolean }
+    | { type: 'system_event'; text: string; user?: string; timestamp: string };
 
   const isTechnicalLog = (acao: string): boolean => {
     const text = (acao || '').toLowerCase();
@@ -743,22 +744,49 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
       text.includes('provedor') ||
       text.includes('status: error') ||
       text.includes('status: exception') ||
-      text.includes('no_smtp_configured')
+      text.includes('no_smtp_configured') ||
+      text.includes('chat4u') ||
+      text.includes('chatwoot') ||
+      text.includes('mensagem oficial de whatsapp enviada')
     );
   };
 
+  // Separa mensagens humanas reais de notificações de mudança de status geradas pelo sistema
+  const realMessages: TimelineItem[] = [];
+  const systemStatusEvents: TimelineItem[] = [];
+
+  visibleMessages.forEach((m) => {
+    const isAutoStatusMsg = 
+      m.channel === 'sistema' && 
+      (m.content?.startsWith('O status do chamado foi alterado') || m.content?.includes('Resumo da Solução:'));
+
+    if (isAutoStatusMsg) {
+      systemStatusEvents.push({
+        type: 'system_event',
+        text: m.content,
+        user: m.user?.nome || 'Sistema',
+        timestamp: m.created_at,
+      });
+    } else {
+      realMessages.push({
+        type: 'message',
+        data: m,
+        timestamp: m.created_at,
+      });
+    }
+  });
+
+  const auditEvents: TimelineItem[] = auditLogs.map((a) => ({
+    type: 'audit',
+    data: a,
+    timestamp: a.criado_em,
+    isTechnical: isTechnicalLog(a.acao),
+  }));
+
   const allTimelineItems: TimelineItem[] = [
-    ...visibleMessages.map((m) => ({
-      type: 'message' as const,
-      data: m,
-      timestamp: m.created_at,
-    })),
-    ...auditLogs.map((a) => ({
-      type: 'audit' as const,
-      data: a,
-      timestamp: a.criado_em,
-      isTechnical: isTechnicalLog(a.acao),
-    })),
+    ...realMessages,
+    ...systemStatusEvents,
+    ...auditEvents,
   ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   // Na visão principal, oculta logs técnicos brutos a menos que o operador ative o toggle de auditoria
@@ -1309,8 +1337,8 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 const isTech = item.isTechnical;
 
                 return (
-                  <div key={`audit-${log.id}`} className="flex items-center justify-center my-3">
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-sm border ${
+                  <div key={`audit-${log.id}`} className="flex items-center justify-center my-2">
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-xs border ${
                       isTech
                         ? 'bg-amber-50/90 border-amber-200 text-amber-800'
                         : 'bg-slate-100/90 border border-slate-200/80 text-slate-500'
@@ -1329,6 +1357,28 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 );
               }
 
+              if (item.type === 'system_event') {
+                const horaFormatada = new Date(item.timestamp).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const dataFormatada = new Date(item.timestamp).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                });
+
+                return (
+                  <div key={`sysevt-${item.timestamp}-${item.text.slice(0, 15)}`} className="flex items-center justify-center my-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] shadow-xs border bg-slate-50 border-slate-200 text-slate-600">
+                      <Activity className="w-3 h-3 text-blue-500 shrink-0" />
+                      <span>
+                        <strong className="text-slate-800 font-semibold">{item.user}</strong>: {item.text} às {horaFormatada} ({dataFormatada})
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
               const msg = item.data;
               const isWhisper = msg.is_internal_note;
               const isSenderMe = msg.user_id === user?.id;
@@ -1338,24 +1388,24 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               return (
                 <div
                   key={`msg-${msg.id}`}
-                  className={`flex flex-col transition-all ${
+                  className={`flex flex-col transition-all my-2 ${
                     isWhisper
                       ? 'w-full'
                       : isClientSender
-                      ? 'items-start mr-4 sm:mr-16'
-                      : 'items-end ml-4 sm:ml-16'
+                      ? 'items-start mr-8 sm:mr-24'
+                      : 'items-end ml-8 sm:ml-24'
                   }`}
                 >
                   <div
-                    className={`w-full max-w-2xl p-4 rounded-2xl border shadow-sm transition-all ${
+                    className={`w-fit max-w-xl p-4 rounded-2xl border shadow-sm transition-all ${
                       isWhisper
-                        ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-900 w-full'
                         : isClientSender
                         ? 'bg-white border-slate-200 text-slate-900 rounded-tl-xs'
-                        : 'bg-blue-50/70 border-blue-200 text-slate-900 rounded-tr-xs'
+                        : 'bg-blue-50/80 border-blue-200 text-slate-900 rounded-tr-xs'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
@@ -1389,7 +1439,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {/* Badge de Canal Omnichannel */}
                         {!isWhisper && msg.channel && (
                           <span
