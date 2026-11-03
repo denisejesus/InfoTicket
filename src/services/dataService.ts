@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.24.0
+ * Serviço de dados do TicketFlow v1.25.1
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -1687,31 +1687,140 @@ export const dataService = {
         };
       }
 
-      // Fallback direto via fetch caso functions.invoke falhe no ambiente
-      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-      const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      // 2. Fallback direto via fetch utilizando token da sessão ou Anon Key
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+      const { data: sessionData } = await supabase.auth.getSession();
+      const bearerToken = sessionData?.session?.access_token || supabaseAnonKey;
+
       if (supabaseUrl && supabaseAnonKey) {
-        const res = await fetch(`${supabaseUrl}/functions/v1/list-whatsapp-conversations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${supabaseAnonKey}`,
-            apikey: supabaseAnonKey,
-          },
-          body: JSON.stringify(params),
-        });
-        const json = await res.json();
-        if (!res.ok || json.error) {
-          throw new Error(json.error || `Falha ao listar conversas (${res.status}).`);
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/list-whatsapp-conversations`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${bearerToken}`,
+              apikey: supabaseAnonKey,
+            },
+            body: JSON.stringify(params),
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            throw new Error(json.error || `Falha ao listar conversas (${res.status}).`);
+          }
+          return {
+            conversations: Array.isArray(json.conversations) ? json.conversations : [],
+          };
+        } catch (_edgeFetchErr) {
+          // Segue para fallback direto na API do canal caso a Edge Function ainda não tenha sido publicada
         }
-        return {
-          conversations: Array.isArray(json.conversations) ? json.conversations : [],
-        };
       }
 
-      throw new Error(error?.message || 'Erro ao buscar conversas abertas do WhatsApp.');
+      // 3. Fallback Resiliente (caso a Edge Function ainda não tenha sido publicada no Supabase)
+      const [compRes, chanRes, ticketsRes] = await Promise.all([
+        supabase
+          .from('companies')
+          .select('id, razao_social, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id, chatwoot_inbox_id')
+          .eq('id', params.company_id)
+          .single(),
+        supabase
+          .from('chatwoot_channels')
+          .select('id, inbox_id, nome')
+          .eq('company_id', params.company_id),
+        supabase
+          .from('tickets')
+          .select('id, chatwoot_conversation_id, assunto, status')
+          .eq('company_id', params.company_id),
+      ]);
+
+      const companyRow = compRes.data;
+      if (
+        !companyRow?.chatwoot_url ||
+        !companyRow?.chatwoot_api_access_token ||
+        !companyRow?.chatwoot_account_id
+      ) {
+        throw new Error(
+          'As credenciais de integração do WhatsApp ainda não foram configuradas para esta empresa.'
+        );
+      }
+
+      const foundChan = (chanRes.data || []).find(
+        (c: any) => String(c.id) === String(params.channel_id) || String(c.inbox_id) === String(params.channel_id)
+      );
+      const targetInboxId = foundChan?.inbox_id || companyRow.chatwoot_inbox_id || params.channel_id;
+      const cleanBaseUrl = companyRow.chatwoot_url.replace(/\/+$/, '');
+      const cwEndpoint = `${cleanBaseUrl}/api/v1/accounts/${companyRow.chatwoot_account_id}/conversations?inbox_id=${encodeURIComponent(
+        String(targetInboxId)
+      )}&status=open`;
+
+      const cwRes = await fetch(cwEndpoint, {
+        method: 'GET',
+        headers: {
+          api_access_token: companyRow.chatwoot_api_access_token,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!cwRes.ok) {
+        throw new Error(`Não foi possível consultar as conversas do canal selecionado (${cwRes.status}).`);
+      }
+
+      const cwJson = await cwRes.json();
+      const rawConversations: any[] = Array.isArray(cwJson?.data?.payload)
+        ? cwJson.data.payload
+        : Array.isArray(cwJson?.payload)
+        ? cwJson.payload
+        : Array.isArray(cwJson)
+        ? cwJson
+        : [];
+
+      const existingMap = new Map<string, { id: string; assunto: string }>();
+      (ticketsRes.data || []).forEach((t: any) => {
+        if (t.chatwoot_conversation_id) {
+          existingMap.set(String(t.chatwoot_conversation_id), { id: t.id, assunto: t.assunto });
+        }
+      });
+
+      const mappedConversations = rawConversations.map((conv: any) => {
+        const sender = conv?.meta?.sender || conv?.contact || {};
+        const msgs = Array.isArray(conv?.messages) ? conv.messages : [];
+        const lastMsg = conv?.last_non_activity_message || msgs[msgs.length - 1] || null;
+        const rawTs = lastMsg?.created_at || conv?.last_activity_at || conv?.timestamp || conv?.created_at;
+        const isoDate = rawTs
+          ? typeof rawTs === 'number'
+            ? new Date(rawTs * 1000).toISOString()
+            : new Date(rawTs).toISOString()
+          : new Date().toISOString();
+        const existing = existingMap.get(String(conv.id));
+
+        return {
+          conversation_id: conv.id,
+          contact_name: sender?.name || 'Contato WhatsApp',
+          contact_phone: sender?.phone_number || sender?.identifier || '',
+          contact_email: sender?.email || '',
+          contact_avatar: sender?.thumbnail || sender?.avatar_url || '',
+          last_message: lastMsg?.content || conv?.last_message?.content || 'Conversa ativa no WhatsApp',
+          last_activity_at: isoDate,
+          unread_count: conv?.unread_count || 0,
+          status: conv?.status || 'open',
+          existing_ticket_id: existing?.id || null,
+          existing_ticket_subject: existing?.assunto || null,
+        };
+      });
+
+      return { conversations: mappedConversations };
     } catch (err: any) {
       console.error('[dataService.listWhatsappConversations] Erro:', err);
+      const rawMessage = String(err?.message || '');
+      if (
+        rawMessage.includes('Failed to fetch') ||
+        rawMessage.includes('FunctionsFetchError') ||
+        rawMessage.includes('NetworkError')
+      ) {
+        throw new Error(
+          'Não foi possível conectar ao serviço de listagem do WhatsApp. Certifique-se de que a Edge Function "list-whatsapp-conversations" foi publicada no Supabase.'
+        );
+      }
       throw err;
     }
   },
@@ -1749,29 +1858,154 @@ export const dataService = {
         return data;
       }
 
-      // Fallback direto via fetch
-      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-      const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      // 2. Fallback direto via fetch utilizando token da sessão ou Anon Key
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vrkhkifhkztttukuxbwz.supabase.co';
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+      const { data: sessionData } = await supabase.auth.getSession();
+      const bearerToken = sessionData?.session?.access_token || supabaseAnonKey;
+
       if (supabaseUrl && supabaseAnonKey) {
-        const res = await fetch(`${supabaseUrl}/functions/v1/import-whatsapp-conversation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${supabaseAnonKey}`,
-            apikey: supabaseAnonKey,
-          },
-          body: JSON.stringify(params),
-        });
-        const json = await res.json();
-        if (!res.ok || json.error) {
-          throw new Error(json.error || `Falha ao importar conversa (${res.status}).`);
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/import-whatsapp-conversation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${bearerToken}`,
+              apikey: supabaseAnonKey,
+            },
+            body: JSON.stringify(params),
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            throw new Error(json.error || `Falha ao importar conversa (${res.status}).`);
+          }
+          return json;
+        } catch (_edgeFetchErr) {
+          // Segue para fallback resiliente caso a Edge Function ainda não esteja publicada
         }
-        return json;
       }
 
-      throw new Error(error?.message || 'Erro ao importar conversa do WhatsApp.');
+      // 3. Fallback Resiliente de Importação (caso a Edge Function ainda não tenha sido publicada no Supabase)
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('id, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id')
+        .eq('id', params.company_id)
+        .single();
+
+      let validMessages: any[] = [];
+      if (companyRow?.chatwoot_url && companyRow?.chatwoot_api_access_token && companyRow?.chatwoot_account_id) {
+        const cleanBaseUrl = companyRow.chatwoot_url.replace(/\/+$/, '');
+        try {
+          const msgRes = await fetch(
+            `${cleanBaseUrl}/api/v1/accounts/${companyRow.chatwoot_account_id}/conversations/${params.conversation_id}/messages`,
+            {
+              method: 'GET',
+              headers: {
+                api_access_token: companyRow.chatwoot_api_access_token,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          if (msgRes.ok) {
+            const msgJson = await msgRes.json();
+            const rawMsgs = Array.isArray(msgJson?.payload)
+              ? msgJson.payload
+              : Array.isArray(msgJson?.data?.payload)
+              ? msgJson.data.payload
+              : Array.isArray(msgJson)
+              ? msgJson
+              : [];
+            validMessages = rawMsgs
+              .filter((m: any) => m?.message_type !== 2 && m?.message_type !== 'activity' && m?.content)
+              .sort((a: any, b: any) => {
+                const tA = typeof a.created_at === 'number' ? a.created_at * 1000 : new Date(a.created_at || 0).getTime();
+                const tB = typeof b.created_at === 'number' ? b.created_at * 1000 : new Date(b.created_at || 0).getTime();
+                return tA - tB;
+              });
+          }
+        } catch (_msgErr) {
+          // Prossegue com a criação do chamado mesmo se a consulta direta de mensagens for bloqueada por CORS
+        }
+      }
+
+      const displayContact = params.contact_name?.trim() || params.contact_phone?.trim() || `#${params.conversation_id}`;
+      const finalSubject = params.custom_subject?.trim() || `Atendimento WhatsApp - ${displayContact}`;
+      const firstIncoming =
+        validMessages.find((m: any) => m.message_type === 0 || m.message_type === 'incoming')?.content ||
+        validMessages[0]?.content ||
+        `Atendimento importado do WhatsApp (${displayContact}).`;
+
+      const slaDate = new Date();
+      slaDate.setHours(slaDate.getHours() + 4);
+
+      const { data: createdTicket, error: insertErr } = await supabase
+        .from('tickets')
+        .insert({
+          company_id: params.company_id,
+          client_organization_id: params.client_organization_id,
+          cliente_id: params.cliente_id,
+          operador_id: params.operador_id || null,
+          assunto: finalSubject,
+          descricao: String(firstIncoming).trim(),
+          status: params.operador_id ? 'Em Andamento' : 'Aberto',
+          prioridade: params.prioridade || 'Média',
+          sla_vencimento: slaDate.toISOString(),
+          chatwoot_conversation_id: Number(params.conversation_id) || params.conversation_id,
+        })
+        .select('id')
+        .single();
+
+      if (insertErr || !createdTicket) {
+        throw new Error(insertErr?.message || 'Não foi possível criar o chamado no banco de dados.');
+      }
+
+      if (validMessages.length > 0) {
+        const msgRows = validMessages.map((m: any) => {
+          const isIncoming = m.message_type === 0 || m.message_type === 'incoming';
+          const createdIso = m.created_at
+            ? typeof m.created_at === 'number'
+              ? new Date(m.created_at * 1000).toISOString()
+              : new Date(m.created_at).toISOString()
+            : new Date().toISOString();
+          return {
+            ticket_id: createdTicket.id,
+            company_id: params.company_id,
+            user_id: isIncoming ? params.cliente_id : params.operador_id || params.cliente_id,
+            content: String(m.content).trim(),
+            is_internal_note: Boolean(m.private),
+            channel: 'whatsapp',
+            created_at: createdIso,
+          };
+        });
+        await supabase.from('ticket_messages').insert(msgRows);
+      } else {
+        await supabase.from('ticket_messages').insert({
+          ticket_id: createdTicket.id,
+          company_id: params.company_id,
+          user_id: params.cliente_id,
+          content: String(firstIncoming).trim(),
+          is_internal_note: false,
+          channel: 'whatsapp',
+        });
+      }
+
+      return {
+        success: true,
+        ticket_id: createdTicket.id,
+        imported_messages: validMessages.length,
+      };
     } catch (err: any) {
       console.error('[dataService.importWhatsappConversation] Erro:', err);
+      const rawMessage = String(err?.message || '');
+      if (
+        rawMessage.includes('Failed to fetch') ||
+        rawMessage.includes('FunctionsFetchError') ||
+        rawMessage.includes('NetworkError')
+      ) {
+        throw new Error(
+          'Não foi possível conectar ao serviço de importação do WhatsApp. Certifique-se de que a Edge Function "import-whatsapp-conversation" foi publicada no Supabase.'
+        );
+      }
       throw err;
     }
   },

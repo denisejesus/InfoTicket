@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - Import WhatsApp Conversation Edge Function v1.0.0
+ * TicketFlow - Import WhatsApp Conversation Edge Function v1.0.1
  * Importa uma conversa ativa do WhatsApp (Chat4u), cria o chamado na tabela `tickets`
  * vinculando Organização (`client_organization_id`) e Solicitante (`cliente_id`),
  * e reconstrói todo o histórico de mensagens em `ticket_messages`.
@@ -60,7 +60,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Parâmetros obrigatórios ausentes: company_id, conversation_id, Organização e Solicitante são obrigatórios.",
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -73,7 +73,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Configuração do servidor incompleta (service role ausente).",
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -94,7 +94,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Empresa não encontrada no banco de dados.",
         }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -195,7 +195,7 @@ serve(async (req: Request) => {
           success: false,
           error: `Não foi possível criar o chamado no banco: ${ticketInsertErr?.message || "Erro desconhecido"}`,
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -288,7 +288,7 @@ serve(async (req: Request) => {
         success: false,
         error: err.message || "Erro interno ao importar conversa do WhatsApp.",
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

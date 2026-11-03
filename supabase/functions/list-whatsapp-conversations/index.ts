@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - List WhatsApp Conversations Edge Function v1.0.0
+ * TicketFlow - List WhatsApp Conversations Edge Function v1.0.1
  * Lista as conversas abertas de um Canal de WhatsApp (inbox_id) da empresa ativa
  * GET /api/v1/accounts/{account_id}/conversations?inbox_id={inbox_id}&status=open
  */
@@ -51,7 +51,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Parâmetros obrigatórios ausentes: channel_id e company_id.",
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -64,7 +64,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Configuração do servidor incompleta (credenciais de serviço ausentes).",
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -85,7 +85,7 @@ serve(async (req: Request) => {
           success: false,
           error: "Empresa não localizada no banco de dados.",
         }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -255,7 +255,7 @@ serve(async (req: Request) => {
         success: false,
         error: err.message || "Erro interno ao listar conversas do WhatsApp.",
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
