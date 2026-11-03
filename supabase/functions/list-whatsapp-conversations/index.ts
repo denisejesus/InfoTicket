@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - List WhatsApp Conversations Edge Function v1.0.1
+ * TicketFlow - List WhatsApp Conversations Edge Function v1.1.0
  * Lista as conversas abertas de um Canal de WhatsApp (inbox_id) da empresa ativa
  * GET /api/v1/accounts/{account_id}/conversations?inbox_id={inbox_id}&status=open
+ * Identifica chamados anteriores cruzando estritamente pelo telefone (whatsapp) e chatwoot_conversation_id
  */
 
 const corsHeaders = {
@@ -169,23 +170,43 @@ serve(async (req: Request) => {
       ? cwJson
       : [];
 
-    // 3. Verifica quais conversas já possuem chamado vinculado nesta empresa
-    const { data: existingTickets } = await supabase
-      .from("tickets")
-      .select("id, chatwoot_conversation_id, assunto, status")
-      .eq("company_id", company_id);
+    // 3. Verifica quais conversas ou números de WhatsApp já possuem chamado anterior nesta empresa (aberto ou concluído)
+    const [{ data: existingTickets }, { data: companyProfiles }] = await Promise.all([
+      supabase
+        .from("tickets")
+        .select("id, cliente_id, chatwoot_conversation_id, assunto, status, criado_em")
+        .eq("company_id", company_id)
+        .order("criado_em", { ascending: false }),
+      supabase
+        .from("profiles")
+        .select("id, whatsapp")
+        .eq("company_id", company_id)
+        .not("whatsapp", "is", null),
+    ]);
+
+    const profilePhoneById = new Map<string, string>();
+    (companyProfiles || []).forEach((p: any) => {
+      const digits = String(p.whatsapp || "").replace(/\D/g, "");
+      if (digits.length >= 8) {
+        profilePhoneById.set(p.id, digits);
+      }
+    });
 
     const existingConvMap = new Map<string, { ticket_id: string; status: string }>();
+    const existingPhoneSuffixMap = new Map<string, { ticket_id: string; status: string }>();
+
     (existingTickets || []).forEach((t: any) => {
-      if (t.chatwoot_conversation_id) {
+      if (t.chatwoot_conversation_id && !existingConvMap.has(String(t.chatwoot_conversation_id))) {
         existingConvMap.set(String(t.chatwoot_conversation_id), {
           ticket_id: t.id,
           status: t.status,
         });
-      } else if (t.assunto) {
-        const match = String(t.assunto).match(/#(\d+)/);
-        if (match && match[1]) {
-          existingConvMap.set(match[1], {
+      }
+      if (t.cliente_id && profilePhoneById.has(t.cliente_id)) {
+        const phoneDigits = profilePhoneById.get(t.cliente_id)!;
+        const suffix8 = phoneDigits.slice(-8);
+        if (!existingPhoneSuffixMap.has(suffix8)) {
+          existingPhoneSuffixMap.set(suffix8, {
             ticket_id: t.id,
             status: t.status,
           });
@@ -218,14 +239,21 @@ serve(async (req: Request) => {
           : new Date(rawTimestamp).toISOString()
         : new Date().toISOString();
 
-      const linkedTicket = existingConvMap.get(String(conv.id)) || null;
+      const rawContactPhone = sender?.phone_number || sender?.identifier || "";
+      const contactDigits = String(rawContactPhone).replace(/\D/g, "");
+      const contactSuffix8 = contactDigits.length >= 8 ? contactDigits.slice(-8) : "";
+
+      const linkedTicket =
+        (contactSuffix8 ? existingPhoneSuffixMap.get(contactSuffix8) : null) ||
+        existingConvMap.get(String(conv.id)) ||
+        null;
 
       return {
         conversation_id: conv.id,
         inbox_id: conv.inbox_id || targetInboxId,
         channel_name: channelName,
         contact_name: sender?.name || "Contato WhatsApp",
-        contact_phone: sender?.phone_number || sender?.identifier || "",
+        contact_phone: rawContactPhone,
         contact_email: sender?.email || "",
         contact_avatar: sender?.thumbnail || sender?.avatar_url || null,
         last_message: lastMessageText,

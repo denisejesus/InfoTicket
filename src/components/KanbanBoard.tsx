@@ -1,3 +1,8 @@
+/**
+ * TicketFlow - Quadro Kanban de Chamados v1.2.0
+ * Intercepta o Drag & Drop para a coluna "Fechados", abrindo obrigatoriamente o CloseTicketModal
+ * para exigir o preenchimento de `resumo_conclusao` antes do encerramento.
+ */
 import React, { useState } from 'react';
 import { 
   Building2, 
@@ -11,11 +16,13 @@ import {
 } from 'lucide-react';
 import { Ticket, TicketStatus } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
+import { CloseTicketModal } from './CloseTicketModal';
 
 interface KanbanBoardProps {
   tickets: Ticket[];
   onSelectTicket?: (ticketId: string) => void;
   onTicketStatusChange: (ticketId: string, newStatus: TicketStatus) => Promise<void>;
+  onTicketClosed?: () => void;
 }
 
 interface ColumnConfig {
@@ -71,6 +78,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   tickets,
   onSelectTicket,
   onTicketStatusChange,
+  onTicketClosed,
 }) => {
   const { profile } = useAuth();
   const isCliente = profile?.role === 'Cliente';
@@ -79,6 +87,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
+
+  // Estado para o Modal Obrigatório de "Resumo de Conclusão" ao arrastar para "Fechados"
+  const [ticketToClose, setTicketToClose] = useState<Ticket | null>(null);
 
   // Manipulação de Drag & Drop (HTML5 nativo)
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, ticketId: string) => {
@@ -114,13 +125,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     setDragOverColumn(null);
 
     const ticketId = e.dataTransfer.getData('text/plain') || draggedTicketId;
+    setDraggedTicketId(null);
     if (!ticketId) return;
 
     const currentTicket = tickets.find((t) => t.id === ticketId);
     if (!currentTicket) return;
 
-    // Se o status já for o mesmo, não faz nada
-    if (currentTicket.status === targetStatus) return;
+    // Se o status já for o mesmo (ou já estiver fechado ao soltar em Fechados), não faz nada
+    if (
+      currentTicket.status === targetStatus ||
+      (targetStatus === 'Fechado' && (currentTicket.status === 'Fechado' || currentTicket.status === 'Resolvido'))
+    ) {
+      return;
+    }
+
+    // REGRA DE NEGÓCIO CRÍTICA: Se a coluna de destino for "Fechados", NÃO dispara UPDATE direto.
+    // Abre obrigatoriamente o Modal de "Resumo de Conclusão".
+    if (targetStatus === 'Fechado') {
+      setTicketToClose(currentTicket);
+      return;
+    }
 
     try {
       setUpdatingTicketId(ticketId);
@@ -129,7 +153,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       console.error('Erro ao atualizar status via Kanban:', err);
     } finally {
       setUpdatingTicketId(null);
-      setDraggedTicketId(null);
     }
   };
 
@@ -322,6 +345,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           );
         })}
       </div>
+
+      {/* Modal Obrigatório de Resumo de Conclusão ao arrastar para "Fechados" */}
+      <CloseTicketModal
+        ticket={ticketToClose}
+        isOpen={Boolean(ticketToClose)}
+        onClose={() => {
+          // Cancelamento: fecha o modal e mantém o card intacto na coluna original
+          setTicketToClose(null);
+        }}
+        onTicketClosed={() => {
+          setTicketToClose(null);
+          if (onTicketClosed) {
+            onTicketClosed();
+          }
+        }}
+      />
     </div>
   );
 };

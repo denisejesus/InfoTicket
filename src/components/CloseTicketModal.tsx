@@ -1,8 +1,8 @@
 /**
- * InfoTicket - Modal de Encerramento de Chamado v1.3.0
+ * InfoTicket - Modal de Encerramento de Chamado v1.4.0
  * Valida obrigatoriamente o preenchimento de Resumo de Conclusão antes de alterar o status para 'Fechado'
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -10,6 +10,7 @@ import {
   AlertCircle,
   FileCheck2 
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { Ticket } from '../types/database';
 
@@ -26,14 +27,29 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
   onClose,
   onTicketClosed,
 }) => {
+  const { user } = useAuth();
   const [resumoConclusao, setResumoConclusao] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setResumoConclusao('');
+      setErrorMsg(null);
+    }
+  }, [isOpen, ticket?.id]);
 
   if (!isOpen || !ticket) return null;
 
   // O botão de confirmar só é ativado se o resumo não estiver vazio
   const isValid = resumoConclusao.trim().length > 0;
+
+  const handleCancel = () => {
+    if (loading) return;
+    setResumoConclusao('');
+    setErrorMsg(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +62,7 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
       await dataService.closeTicket(
         ticket.id, 
         resumoConclusao.trim(), 
-        ticket.operador_id || undefined, 
+        user?.id || ticket.operador_id || undefined, 
         ticket.company_id
       );
       setResumoConclusao('');
@@ -77,7 +93,8 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={handleCancel}
             disabled={loading}
             className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
           >
@@ -114,11 +131,11 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
           <div className="pt-2 flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCancel}
               disabled={loading}
               className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
             >
-              Voltar
+              Cancelar
             </button>
             <button
               type="submit"

@@ -1,7 +1,7 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.12.0
+ * TicketFlow - Página "Meus Chamados" v1.13.0
  * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência,
- * Importação de conversas ativas do WhatsApp e navegação.
+ * Importação de conversas ativas do WhatsApp, bloqueio de encerramento sem resumo no Kanban e navegação.
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
 import React, { useEffect, useState } from 'react';
@@ -102,6 +102,11 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
   }, [currentCompany?.id]);
 
   const handleTicketStatusChange = async (ticketId: string, newStatus: TicketStatus) => {
+    // Trava de segurança: nenhum chamado pode ser encerrado diretamente sem o Resumo de Conclusão
+    if (newStatus === 'Fechado') {
+      return;
+    }
+
     try {
       // Atualização otimista local
       setTickets((prev) =>
@@ -310,6 +315,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
             tickets={filteredTickets}
             onSelectTicket={onSelectTicket}
             onTicketStatusChange={handleTicketStatusChange}
+            onTicketClosed={loadTickets}
           />
         )
       ) : (

@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.25.1
+ * Serviço de dados do TicketFlow v1.26.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -1717,7 +1717,7 @@ export const dataService = {
       }
 
       // 3. Fallback Resiliente (caso a Edge Function ainda não tenha sido publicada no Supabase)
-      const [compRes, chanRes, ticketsRes] = await Promise.all([
+      const [compRes, chanRes, ticketsRes, profilesRes] = await Promise.all([
         supabase
           .from('companies')
           .select('id, razao_social, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id, chatwoot_inbox_id')
@@ -1729,8 +1729,14 @@ export const dataService = {
           .eq('company_id', params.company_id),
         supabase
           .from('tickets')
-          .select('id, chatwoot_conversation_id, assunto, status')
-          .eq('company_id', params.company_id),
+          .select('id, cliente_id, chatwoot_conversation_id, assunto, status, criado_em')
+          .eq('company_id', params.company_id)
+          .order('criado_em', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id, whatsapp')
+          .eq('company_id', params.company_id)
+          .not('whatsapp', 'is', null),
       ]);
 
       const companyRow = compRes.data;
@@ -1774,10 +1780,25 @@ export const dataService = {
         ? cwJson
         : [];
 
+      const profilePhoneById = new Map<string, string>();
+      (profilesRes.data || []).forEach((p: any) => {
+        const digits = String(p.whatsapp || '').replace(/\D/g, '');
+        if (digits.length >= 8) {
+          profilePhoneById.set(p.id, digits);
+        }
+      });
+
       const existingMap = new Map<string, { id: string; assunto: string }>();
+      const existingPhoneMap = new Map<string, { id: string; assunto: string }>();
       (ticketsRes.data || []).forEach((t: any) => {
-        if (t.chatwoot_conversation_id) {
+        if (t.chatwoot_conversation_id && !existingMap.has(String(t.chatwoot_conversation_id))) {
           existingMap.set(String(t.chatwoot_conversation_id), { id: t.id, assunto: t.assunto });
+        }
+        if (t.cliente_id && profilePhoneById.has(t.cliente_id)) {
+          const suffix8 = profilePhoneById.get(t.cliente_id)!.slice(-8);
+          if (!existingPhoneMap.has(suffix8)) {
+            existingPhoneMap.set(suffix8, { id: t.id, assunto: t.assunto });
+          }
         }
       });
 
@@ -1791,12 +1812,19 @@ export const dataService = {
             ? new Date(rawTs * 1000).toISOString()
             : new Date(rawTs).toISOString()
           : new Date().toISOString();
-        const existing = existingMap.get(String(conv.id));
+
+        const rawContactPhone = sender?.phone_number || sender?.identifier || '';
+        const contactDigits = String(rawContactPhone).replace(/\D/g, '');
+        const contactSuffix8 = contactDigits.length >= 8 ? contactDigits.slice(-8) : '';
+
+        const existing =
+          (contactSuffix8 ? existingPhoneMap.get(contactSuffix8) : undefined) ||
+          existingMap.get(String(conv.id));
 
         return {
           conversation_id: conv.id,
           contact_name: sender?.name || 'Contato WhatsApp',
-          contact_phone: sender?.phone_number || sender?.identifier || '',
+          contact_phone: rawContactPhone,
           contact_email: sender?.email || '',
           contact_avatar: sender?.thumbnail || sender?.avatar_url || '',
           last_message: lastMsg?.content || conv?.last_message?.content || 'Conversa ativa no WhatsApp',
