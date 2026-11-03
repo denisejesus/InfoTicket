@@ -1,7 +1,7 @@
 /**
- * TicketFlow - Gestão de Equipe e Clientes (RBAC) v1.13.0
- * Controle de Acesso Baseado em Papéis com Isolamento Estrito Multi-tenant (RLS)
- * Suporte a Arquitetura B2B2B (Organizações Clientes)
+ * TicketFlow - Gestão de Equipe e Clientes (Permissões de Acesso) v1.14.0
+ * Controle de Permissões com Isolamento Estrito por Empresa
+ * Suporte a Organizações Clientes e Medidor de Força de Senha
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
  */
 import React, { useEffect, useState } from 'react';
@@ -31,6 +31,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { Profile, Company, UserRole, ClientOrganization } from '../types/database';
+import { PasswordStrengthMeter, validatePasswordStrength } from '../components/PasswordStrengthMeter';
 
 interface UsersPageProps {
   activeCompany?: Company | null;
@@ -145,12 +146,12 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     }
 
     if (role === 'Cliente' && !whatsapp.trim()) {
-      setFormError('O número de WhatsApp é obrigatório para clientes para integração com o Chat4u.');
+      setFormError('O número de WhatsApp é obrigatório para clientes para integração e notificações via WhatsApp.');
       return;
     }
 
     if (!currentCompany?.id) {
-      setFormError('Tenant não identificado. Não foi possível associar a empresa ao usuário.');
+      setFormError('Empresa não identificada. Não foi possível associar a organização ao usuário.');
       return;
     }
 
@@ -222,7 +223,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     }
 
     if (editRole === 'Cliente' && !editWhatsapp.trim()) {
-      setEditError('O número de WhatsApp é obrigatório para clientes para integração com o Chat4u.');
+      setEditError('O número de WhatsApp é obrigatório para clientes para integração e notificações via WhatsApp.');
       return;
     }
 
@@ -291,8 +292,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     e.preventDefault();
     if (!resetPasswordProfile) return;
 
-    if (!newPassword || newPassword.length < 6) {
-      setResetError('A nova senha deve ter no mínimo 6 caracteres.');
+    if (!newPassword) {
+      setResetError('Por favor, informe a nova senha.');
+      return;
+    }
+
+    const strength = validatePasswordStrength(newPassword);
+    if (!strength.isValid) {
+      setResetError('A nova senha deve ter no mínimo 8 caracteres, mesclando letras e números.');
       return;
     }
 
@@ -383,9 +390,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-              Controle de Acesso RBAC
+              Níveis de Acesso
             </span>
-            <span className="text-xs text-slate-500 font-medium">Multi-tenant Isolado</span>
+            <span className="text-xs text-slate-500 font-medium">Empresas e Organizações</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
             Gestão de Equipe & Clientes
@@ -899,7 +906,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   </span>
                   {role === 'Cliente' && (
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-bold">
-                      Obrigatório para Chat4u
+                      Obrigatório para WhatsApp
                     </span>
                   )}
                 </label>
@@ -1097,7 +1104,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   </span>
                   {editRole === 'Cliente' && (
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-bold">
-                      Obrigatório para Chat4u
+                      Obrigatório para WhatsApp
                     </span>
                   )}
                 </label>
@@ -1204,16 +1211,17 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Nova Senha * (mínimo 6 caracteres)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Nova Senha * (mínimo 8 caracteres, letras e números)</label>
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Digite a nova senha segura..."
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900"
                 />
+                <PasswordStrengthMeter password={newPassword} />
               </div>
 
               <div>
@@ -1221,7 +1229,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirme a nova senha..."

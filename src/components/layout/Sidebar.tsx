@@ -75,18 +75,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-base font-bold text-slate-900 tracking-tight">TicketFlow</span>
               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                SaaS
+                Corporativo
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">B2B Helpdesk</p>
+            <p className="text-[11px] text-slate-500 font-medium">Plataforma de Atendimento</p>
           </div>
         </div>
 
-        {/* Multi-Tenant Box */}
+        {/* Empresa Ativa */}
         <div className="p-3 mx-4 my-3 bg-slate-50 border border-slate-200 rounded-xl">
           <div className="flex items-center gap-2 text-slate-500 mb-1">
             <Building2 className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-[11px] font-medium uppercase tracking-wider">Tenant Ativo</span>
+            <span className="text-[11px] font-medium uppercase tracking-wider">Empresa Ativa</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-800 truncate" title={empresaNome}>
@@ -159,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center gap-3">
                 <Database className="w-4 h-4 text-amber-600" />
-                <span>Status Supabase</span>
+                <span>Status da Conexão</span>
               </div>
               <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-mono">
                 Dev

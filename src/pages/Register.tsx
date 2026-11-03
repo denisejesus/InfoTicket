@@ -18,6 +18,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { PasswordStrengthMeter, validatePasswordStrength } from '../components/PasswordStrengthMeter';
 
 interface RegisterProps {
   onSuccess?: () => void;

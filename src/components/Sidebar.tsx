@@ -81,14 +81,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-base font-bold text-slate-900 tracking-tight">TicketFlow</span>
               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                SaaS B2B
+                Corporativo
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">Gestão de Chamados</p>
+            <p className="text-[11px] text-slate-500 font-medium">Plataforma de Atendimento</p>
           </div>
         </div>
 
-        {/* Tenant Ativo (Empresa Multi-tenant) */}
+        {/* Empresa Ativa */}
         <div className="p-3 mx-4 my-3 bg-slate-50 border border-slate-200 rounded-xl">
           <div className="flex items-center gap-2 text-slate-500 mb-1">
             <Building2 className="w-3.5 h-3.5 text-blue-600" />
@@ -173,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               TicketFlow Core
             </span>
             <span className="px-1.5 py-0.2 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.10.2
+              v1.10.3
             </span>
           </div>
         </div>
