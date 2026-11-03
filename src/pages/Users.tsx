@@ -1,6 +1,6 @@
 /**
- * TicketFlow - Gestão de Equipe e Clientes (Permissões de Acesso) v1.14.0
- * Controle de Permissões com Isolamento Estrito por Empresa
+ * TicketFlow - Gestão de Equipe e Clientes (Permissões de Acesso) v1.15.0
+ * Controle de Permissões com Isolamento Estrito por Empresa e Trava Anti-Escalonamento para Super Admin
  * Suporte a Organizações Clientes e Medidor de Força de Senha
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
  */
@@ -61,7 +61,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [role, setRole] = useState<'Gerente' | 'Operador' | 'Cliente'>('Operador');
+  const [role, setRole] = useState<'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Cliente'>('Operador');
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [newOrgName, setNewOrgName] = useState('');
   const [isCreatingNewOrg, setIsCreatingNewOrg] = useState(false);
@@ -113,14 +113,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
   }, [currentCompany?.id, canView]);
 
   // Se o role mudar no select do modal, atualiza padrão de notificações
-  const handleRoleChange = (newRole: 'Gerente' | 'Operador' | 'Cliente') => {
+  const handleRoleChange = (newRole: 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Cliente') => {
+    // Trava de segurança imediata no frontend: apenas Super Admin pode selecionar Super Admin
+    if (newRole === 'Super Admin' && profile?.role !== 'Super Admin') {
+      setFormError('Permissão negada: Apenas um Super Admin pode conceder o papel Super Admin.');
+      return;
+    }
     setRole(newRole);
-    if (newRole === 'Gerente') {
+    if (newRole === 'Gerente' || newRole === 'Gestor' || newRole === 'Super Admin') {
       setRecebeNotificacoes(true);
     }
   };
 
-  const handleOpenModal = (defaultRole?: 'Gerente' | 'Operador' | 'Cliente') => {
+  const handleOpenModal = (defaultRole?: 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Cliente') => {
     setNome('');
     setEmail('');
     setWhatsapp('');
@@ -129,7 +134,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     setSelectedOrgId(organizations.length > 0 ? organizations[0].id : '');
     setIsCreatingNewOrg(false);
     setNewOrgName('');
-    setRecebeNotificacoes(initialRole === 'Gerente');
+    setRecebeNotificacoes(initialRole === 'Gerente' || initialRole === 'Gestor' || initialRole === 'Super Admin');
     setFormError(null);
     setSuccessMsg(null);
     setIsModalOpen(true);
@@ -139,6 +144,12 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
     e.preventDefault();
     setFormError(null);
     setSuccessMsg(null);
+
+    // Validação crítica de segurança contra escalonamento de privilégios
+    if (role === 'Super Admin' && profile?.role !== 'Super Admin') {
+      setFormError('Operação bloqueada por segurança: Apenas usuários com perfil Super Admin podem criar outro Super Admin.');
+      return;
+    }
 
     if (!nome.trim() || !email.trim()) {
       setFormError('Por favor, informe o nome completo e o e-mail do usuário.');
@@ -217,6 +228,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProfile) return;
+
+    // Validação crítica de segurança contra escalonamento de privilégios na edição
+    if (editRole === 'Super Admin' && profile?.role !== 'Super Admin') {
+      setEditError('Operação bloqueada por segurança: Apenas usuários com perfil Super Admin podem atribuir o papel Super Admin.');
+      return;
+    }
+
     if (!editNome.trim()) {
       setEditError('O nome não pode ficar em branco.');
       return;
@@ -935,10 +953,16 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                 >
                   <option value="Operador">Operador (Atendimento e resolução de chamados)</option>
                   <option value="Gerente">Gerente (Supervisão operacional e relatórios)</option>
+                  <option value="Gestor">Gestor (Administração da empresa)</option>
                   <option value="Cliente">Cliente (Abertura e acompanhamento de tickets)</option>
+                  {profile?.role === 'Super Admin' && (
+                    <option value="Super Admin">Super Admin (Acesso Master Global)</option>
+                  )}
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  O Gestor possui permissão para definir os papéis de Gerente, Operador e Cliente.
+                  {profile?.role === 'Super Admin'
+                    ? 'Como Super Admin, você pode conceder qualquer nível de acesso, incluindo Super Admin.'
+                    : 'Defina o nível de permissão do usuário dentro da organização.'}
                 </p>
               </div>
 

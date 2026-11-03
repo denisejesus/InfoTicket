@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.21.0
+ * Serviço de dados do TicketFlow v1.23.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -42,6 +42,24 @@ export const dataService = {
     recebe_notificacoes: boolean;
     temporary_password?: string;
   }): Promise<{ profile: Profile; temporaryPassword: string }> {
+    // Validação crítica de segurança contra escalonamento de privilégios para 'Super Admin'
+    if (profileData.role.trim() === 'Super Admin') {
+      const { data: authSession } = await supabase.auth.getUser();
+      const callerId = authSession?.user?.id;
+      if (!callerId) {
+        throw new Error('Bloqueio de segurança: Sessão inválida para conceder o papel Super Admin.');
+      }
+      const { data: callerProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', callerId)
+        .maybeSingle();
+
+      if (callerProfile?.role !== 'Super Admin') {
+        throw new Error('Bloqueio de segurança: Apenas um Super Admin autenticado pode criar um usuário com papel Super Admin.');
+      }
+    }
+
     const rawEmail = profileData.email.trim().toLowerCase();
     const tempPassword = profileData.temporary_password || this.generateSecureTemporaryPassword();
 
@@ -127,6 +145,24 @@ export const dataService = {
    * Atualiza campos de um perfil (nome, role, recebe_notificacoes, etc.)
    */
   async updateProfile(profileId: string, updates: Partial<Profile>): Promise<Profile | null> {
+    // Validação crítica de segurança contra escalonamento de privilégios para 'Super Admin'
+    if (updates.role && updates.role.trim() === 'Super Admin') {
+      const { data: authSession } = await supabase.auth.getUser();
+      const callerId = authSession?.user?.id;
+      if (!callerId) {
+        throw new Error('Bloqueio de segurança: Sessão inválida para conceder o papel Super Admin.');
+      }
+      const { data: callerProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', callerId)
+        .maybeSingle();
+
+      if (callerProfile?.role !== 'Super Admin') {
+        throw new Error('Bloqueio de segurança: Apenas um Super Admin autenticado pode atribuir o papel Super Admin.');
+      }
+    }
+
     const { data, error } = await supabase
       .from('profiles')
       .update({
@@ -205,6 +241,84 @@ export const dataService = {
       return {
         success: false,
         message: err.message || 'Falha na conexão com a Edge Function de redefinição de senha.',
+      };
+    }
+  },
+
+  /**
+   * Recuperação de senha a partir da tela de Login:
+   * Gera uma nova senha temporária segura, sincroniza no Supabase Auth e envia por e-mail via SMTP corporativo
+   */
+  async requestPasswordRecovery(email: string): Promise<{ success: boolean; message: string }> {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return {
+        success: false,
+        message: 'Por favor, informe um endereço de e-mail válido.',
+      };
+    }
+
+    try {
+      const tempPassword = this.generateSecureTemporaryPassword();
+
+      // 1. Atualiza a senha no Supabase Auth pelo e-mail via Edge Function reset-user-password
+      const resetRes = await this.resetUserPassword(undefined, tempPassword, cleanEmail);
+
+      if (!resetRes.success || !resetRes.user?.id) {
+        // Fallback: Tenta disparo nativo do Supabase Auth caso a Edge Function não localize
+        const redirectUrl =
+          typeof window !== 'undefined'
+            ? `${window.location.origin}${window.location.pathname}`
+            : 'https://dev2.infocast.com.br/ticketflow/login';
+
+        const { error: supError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: redirectUrl,
+        });
+
+        if (supError) {
+          return {
+            success: false,
+            message: resetRes.message || 'Não foi possível localizar uma conta ativa com este e-mail.',
+          };
+        }
+
+        return {
+          success: true,
+          message: 'Enviamos as instruções de recuperação de senha para o seu e-mail.',
+        };
+      }
+
+      // 2. Dispara o e-mail corporativo com a nova senha temporária via Edge Function send-notification
+      const appUrl =
+        typeof window !== 'undefined' && window.location.pathname.startsWith('/ticketflow')
+          ? `${window.location.origin}/ticketflow`
+          : typeof window !== 'undefined'
+          ? window.location.origin
+          : 'https://dev2.infocast.com.br/ticketflow';
+
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          event_type: 'welcome_email',
+          user_id: resetRes.user.id,
+          recipient_email: cleanEmail,
+          temp_password: tempPassword,
+          custom_data: {
+            senha: tempPassword,
+            senha_temporaria: tempPassword,
+          },
+          app_url: appUrl,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Uma nova senha temporária foi gerada e enviada para o seu e-mail cadastrado. Verifique sua caixa de entrada (e spam).',
+      };
+    } catch (err: any) {
+      console.error('Erro na recuperação de senha:', err);
+      return {
+        success: false,
+        message: err.message || 'Erro ao processar a solicitação de redefinição de senha.',
       };
     }
   },
