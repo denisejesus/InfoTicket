@@ -1,3 +1,6 @@
+/**
+ * TicketFlow - Layout Base Responsivo v1.1.0
+ */
 import React, { useState } from 'react';
 import { Sidebar, NavItem } from './Sidebar';
 import { Header } from './Header';
@@ -42,7 +45,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         />
 
         {/* Conteúdo Central Principal */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-2.5 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto overflow-x-hidden">
           {children}
         </main>
       </div>

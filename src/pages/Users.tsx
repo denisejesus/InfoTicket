@@ -1,7 +1,7 @@
 /**
- * TicketFlow - Gestão de Equipe e Clientes (Permissões de Acesso) v1.15.0
+ * TicketFlow - Gestão de Equipe e Clientes (Permissões de Acesso) v1.16.0
  * Controle de Permissões com Isolamento Estrito por Empresa e Trava Anti-Escalonamento para Super Admin
- * Suporte a Organizações Clientes e Medidor de Força de Senha
+ * Suporte a Organizações Clientes, Medidor de Força de Senha, Tabelas com Rolagem Horizontal e Modais Responsivos
  * Acesso exclusivo para Gestor e Super Admin (com visualização permitida para Gerente)
  */
 import React, { useEffect, useState } from 'react';
@@ -521,8 +521,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[780px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4">Nome & Identificação</th>
@@ -847,30 +847,32 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
 
       {/* Modal Adicionar Novo Usuário */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold shrink-0">
                   <UserPlus className="w-4 h-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-tight">Adicionar Novo Usuário</h2>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 leading-tight truncate">Adicionar Novo Usuário</h2>
                   <p className="text-[11px] text-slate-500 truncate max-w-xs">{currentCompany?.razao_social}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 disabled={saving}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+            {/* Modal Form com Rolagem Interna e Botões Fixos */}
+            <form onSubmit={handleCreateUser} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {formError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 font-medium">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -1045,14 +1047,15 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   />
                 </button>
               </div>
+              </div>
 
-              {/* Ações do Modal */}
-              <div className="pt-3 flex items-center justify-end gap-2.5">
+              {/* Ações Fixas do Modal */}
+              <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={saving}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1080,28 +1083,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
       )}
       {/* Modal Editar Usuário (Nome e Role) */}
       {editingProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col text-slate-900">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold shrink-0">
                   <Edit2 className="w-4 h-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-tight">Editar Usuário</h2>
-                  <p className="text-[11px] text-slate-500">{editingProfile.email}</p>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 leading-tight truncate">Editar Usuário</h2>
+                  <p className="text-[11px] text-slate-500 truncate">{editingProfile.email}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingProfile(null)}
                 disabled={savingEdit}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
+            <form onSubmit={handleSaveEdit} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {editError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 font-medium">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -1156,13 +1161,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   {isSuperAdmin && <option value="Super Admin">Super Admin (Global)</option>}
                 </select>
               </div>
+              </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2.5">
+              <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingProfile(null)}
                   disabled={savingEdit}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1191,28 +1197,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
 
       {/* Modal Redefinir Senha */}
       {resetPasswordProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col text-slate-900">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-700 font-bold">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-700 font-bold shrink-0">
                   <KeyRound className="w-4 h-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-tight">Redefinir Senha</h2>
-                  <p className="text-[11px] text-slate-500">{resetPasswordProfile.nome} ({resetPasswordProfile.email})</p>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 leading-tight truncate">Redefinir Senha</h2>
+                  <p className="text-[11px] text-slate-500 truncate">{resetPasswordProfile.nome} ({resetPasswordProfile.email})</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setResetPasswordProfile(null)}
                 disabled={resettingPassword}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveResetPassword} className="p-6 space-y-4">
+            <form onSubmit={handleSaveResetPassword} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
                 <p className="font-semibold mb-1">Atenção:</p>
                 <p>
@@ -1260,13 +1268,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ activeCompany }) => {
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900"
                 />
               </div>
+              </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2.5">
+              <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setResetPasswordProfile(null)}
                   disabled={resettingPassword}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>

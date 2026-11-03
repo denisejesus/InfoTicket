@@ -1,3 +1,6 @@
+/**
+ * TicketFlow - Sidebar de Layout Base v1.0.3
+ */
 import React from 'react';
 import { 
   LayoutDashboard, 
@@ -6,7 +9,8 @@ import {
   Settings, 
   ShieldCheck, 
   Building2,
-  Database
+  Database,
+  X
 } from 'lucide-react';
 
 export type NavItem = 'painel' | 'meus-chamados' | 'clientes' | 'configuracoes' | 'dev-setup';
@@ -62,24 +66,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Fixo */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col w-64 bg-white border-r border-slate-200 transition-transform duration-200 ease-in-out lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col w-64 max-w-[82vw] bg-white border-r border-slate-200 transition-transform duration-200 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white font-bold shadow-sm">
-            TF
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-slate-900 tracking-tight">TicketFlow</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                Corporativo
-              </span>
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-6 h-16 border-b border-slate-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white font-bold shadow-sm shrink-0">
+              TF
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">Plataforma de Atendimento</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-bold text-slate-900 tracking-tight truncate">TicketFlow</span>
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded shrink-0">
+                  Corporativo
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium truncate">Plataforma de Atendimento</p>
+            </div>
           </div>
+
+          {onCloseMobile && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              aria-label="Fechar menu lateral"
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg lg:hidden transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Empresa Ativa */}
@@ -176,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               TicketFlow Core
             </span>
             <span className="px-1.5 py-0.5 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.0.2
+              v1.0.3
             </span>
           </div>
         </div>

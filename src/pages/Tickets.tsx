@@ -1,7 +1,8 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.13.0
+ * TicketFlow - Página "Meus Chamados" v1.14.0
  * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência,
  * Importação de conversas ativas do WhatsApp, bloqueio de encerramento sem resumo no Kanban e navegação.
+ * 100% Responsiva para tablets e smartphones com rolagem horizontal na listagem.
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
 import React, { useEffect, useState } from 'react';
@@ -148,22 +149,22 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
   return (
     <div className="space-y-6 font-sans antialiased text-slate-900">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Meus Chamados</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Meus Chamados</h1>
+          <p className="text-xs sm:text-sm text-slate-600 mt-1">
             Portal de Atendimento ao Cliente • Acompanhamento de chamados em tempo real da{' '}
             <strong className="text-slate-800">{currentCompany?.razao_social || 'sua organização'}</strong>.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Toggle de Visualização: Tabela vs Kanban */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               type="button"
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 viewMode === 'table'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900'
@@ -175,7 +176,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
             <button
               type="button"
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 viewMode === 'kanban'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900'
@@ -198,7 +199,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
             <button
               type="button"
               onClick={() => setIsImportWhatsappOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
             >
               <MessageSquare className="w-4 h-4" />
               <span>Importar do WhatsApp</span>
@@ -207,7 +208,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
 
           <button
             onClick={() => setIsNewTicketOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition-all"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Chamado</span>
@@ -335,8 +336,8 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[820px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4">ID</th>

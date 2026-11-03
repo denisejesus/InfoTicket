@@ -1,6 +1,7 @@
 /**
- * InfoTicket - Painel de Administração Global (Master Infocast) v1.6.0
+ * InfoTicket - Painel de Administração Global (Master Infocast) v1.7.0
  * Gestão de Tenants (Empresas), Ficha Cadastral Completa, Dados de Contato do Gestor, Status e Prazos de Trial
+ * Tabela com Rolagem Horizontal e Modal Responsivo para Smartphones e Tablets
  * Acesso exclusivo para usuários com role 'Super Admin'
  */
 import React, { useEffect, useState } from 'react';
@@ -248,8 +249,8 @@ export const GlobalAdmin: React.FC = () => {
             <p className="font-semibold text-slate-700">Nenhuma empresa encontrada.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[780px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4">Razão Social / Identificação</th>
@@ -371,10 +372,10 @@ export const GlobalAdmin: React.FC = () => {
 
       {/* Modal de Ficha Cadastral Completa e Edição de Organização */}
       {editingCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
-            {/* Cabeçalho do Modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
+            {/* Cabeçalho Fixo do Modal */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-purple-100 text-purple-700 font-bold border border-purple-200">
                   <Building2 className="w-5 h-5" />
@@ -397,8 +398,9 @@ export const GlobalAdmin: React.FC = () => {
               </button>
             </div>
 
-            {/* Corpo do Modal com Ficha Cadastral Detalhada + Edição */}
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-5 overflow-y-auto">
+            {/* Corpo do Modal com Ficha Cadastral Detalhada + Edição e Rodapé Fixo */}
+            <form onSubmit={handleSaveEdit} className="flex-1 flex flex-col min-h-0">
+              <div className="p-4 sm:p-6 space-y-5 flex-1 overflow-y-auto">
               {modalError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 font-medium">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -600,9 +602,10 @@ export const GlobalAdmin: React.FC = () => {
                   Altere o status ou a data de vencimento para liberar a assinatura definitiva ou estender o período de avaliação.
                 </p>
               </div>
+              </div>
 
-              {/* Rodapé de Ações do Modal */}
-              <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-100">
+              {/* Rodapé Fixo de Ações do Modal */}
+              <div className="px-4 sm:px-6 py-3.5 bg-slate-50 flex items-center justify-end gap-2.5 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingCompany(null)}

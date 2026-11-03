@@ -1,8 +1,9 @@
 /**
- * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.1.0
+ * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.2.0
  * Permite puxar conversas ativas do WhatsApp (Canais da empresa) e transformá-las em chamados no sistema.
  * Regra de Negócio: A ligação de identidade ocorre pelo número de WhatsApp; mesmo quando já existe
  * chamado anterior (exibindo o aviso azul), o botão "Abrir Chamado" SEMPRE força a criação de um novo chamado.
+ * Layout 100% Responsivo no Smartphone com Rolagem Interna e Botões Fixos Acessíveis.
  * Regras absolutas: Tema Claro (Light Mode), Isolamento Multi-Tenant (company_id) e zero jargões técnicos na interface.
  */
 import React, { useState, useEffect } from 'react';
@@ -284,17 +285,17 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Cabeçalho do Modal - Tema Claro */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+        {/* Cabeçalho Fixo do Modal - Tema Claro */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50 border-b border-slate-200 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm shrink-0">
               <MessageSquare className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Importar Conversa do WhatsApp</h2>
-              <p className="text-xs text-slate-500">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">Importar Conversa do WhatsApp</h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-1">
                 Transforme um atendimento ativo do WhatsApp em um chamado rastreável na{' '}
                 <strong className="text-slate-700">{currentCompany?.razao_social || 'sua organização'}</strong>
               </p>
@@ -304,15 +305,15 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors disabled:opacity-50"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors disabled:opacity-50 shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Indicador de Passos */}
-        <div className="px-6 py-3 bg-white border-b border-slate-100 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
+        {/* Indicador de Passos Responsivo */}
+        <div className="px-4 sm:px-6 py-2.5 sm:py-3 bg-white border-b border-slate-100 flex items-center justify-between gap-2 overflow-x-auto text-xs shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span
               className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[11px] ${
                 selectedChannelId
@@ -322,12 +323,12 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
             >
               1
             </span>
-            <span className="font-semibold text-slate-800">Canal de WhatsApp</span>
+            <span className="font-semibold text-slate-800 whitespace-nowrap">Canal</span>
           </div>
 
-          <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span
               className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[11px] ${
                 selectedConversation
@@ -339,14 +340,14 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
             >
               2
             </span>
-            <span className={selectedChannelId ? 'font-semibold text-slate-800' : 'text-slate-400'}>
-              Selecionar Conversa
+            <span className={`whitespace-nowrap ${selectedChannelId ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>
+              Conversa
             </span>
           </div>
 
-          <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span
               className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[11px] ${
                 selectedConversation ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'
@@ -354,14 +355,14 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
             >
               3
             </span>
-            <span className={selectedConversation ? 'font-semibold text-slate-800' : 'text-slate-400'}>
-              Vincular Organização
+            <span className={`whitespace-nowrap ${selectedConversation ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>
+              Organização
             </span>
           </div>
         </div>
 
-        {/* Corpo do Modal */}
-        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+        {/* Corpo do Modal com Rolagem Interna */}
+        <div className="p-4 sm:p-6 space-y-5 flex-1 overflow-y-auto min-h-0">
           {errorMsg && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -469,7 +470,7 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                     return (
                       <div
                         key={conv.conversation_id}
-                        className="p-4 bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-xs rounded-xl transition-all flex items-center justify-between gap-4"
+                        className="p-3.5 sm:p-4 bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-xs rounded-xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                       >
                         <div className="min-w-0 flex-1 space-y-1.5">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -513,7 +514,7 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleSelectConversation(conv)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/15 transition-all"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/15 transition-all"
                           >
                             <span>Abrir Chamado</span>
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -646,7 +647,7 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
+              <div className="sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={onClose}
@@ -676,6 +677,20 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
             </form>
           )}
         </div>
+
+        {/* Rodapé Fixo nos Passos 1 e 2 */}
+        {!selectedConversation && (
+          <div className="px-4 sm:px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={importing}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

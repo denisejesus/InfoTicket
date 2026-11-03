@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Aplicação Principal v1.8.0
+ * TicketFlow - Aplicação Principal v1.9.0
  * Gerenciamento de Rotas Públicas (/login, /register) e Rotas Protegidas com Painel Master Infocast (/admin), Relatórios (/relatorios), RBAC (/usuarios) e Detalhes (/tickets/:id)
  */
 import React, { useEffect, useState } from 'react';
@@ -251,6 +251,7 @@ function AppContent() {
         <div className="flex-1 flex flex-col lg:pl-64 min-w-0">
           <Header
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            isSidebarOpen={sidebarOpen}
             currentUser={profile || undefined}
             onLogout={async () => {
               await signOut();
@@ -260,8 +261,8 @@ function AppContent() {
             onNavigateTab={handleNavigateTab}
           />
 
-          {/* Main: Fundo claro bg-slate-50, tipografia limpa e foco em produtividade */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {/* Main: Fundo claro bg-slate-50, paddings otimizados para maximizar área útil no mobile */}
+          <main className="flex-1 p-2.5 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto overflow-x-hidden">
             {renderContent()}
           </main>
         </div>

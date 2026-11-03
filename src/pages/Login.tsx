@@ -4,17 +4,17 @@
  * Feedback visual integrado para inconsistências de perfil e sessões bloqueadas
  */
 import React, { useState } from 'react';
-import { 
-  Headphones, 
-  Mail, 
-  Lock, 
-  ArrowRight, 
+import {
+  Headphones,
+  Mail,
+  Lock,
+  ArrowRight,
   ArrowLeft,
-  AlertCircle, 
+  AlertCircle,
   CheckCircle2,
-  Loader2, 
-  Eye, 
-  EyeOff, 
+  Loader2,
+  Eye,
+  EyeOff,
   ShieldCheck,
   KeyRound
 } from 'lucide-react';
@@ -79,8 +79,8 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
           .maybeSingle();
 
         if (pError || !profileCheck) {
-          const failMsg = pError 
-            ? `Falha de permissão ao consultar perfil: ${pError.message}` 
+          const failMsg = pError
+            ? `Falha de permissão ao consultar perfil: ${pError.message}`
             : 'Falha de permissão: Perfil não localizado na base corporativa.';
           setAuthError(failMsg);
           await supabase.auth.signOut();
@@ -139,9 +139,15 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
           TicketFlow
         </h1>
         <p className="mt-1.5 text-xs sm:text-sm text-slate-600">
-          {isResetMode
-            ? 'Recuperação de acesso à plataforma corporativa'
-            : 'Acesse a plataforma de chamados e suporte B2B'}
+          {isResetMode ? (
+            'Recuperação de acesso à plataforma corporativa'
+          ) : (
+            <>
+              Mais organização, agilidade e controle para seus atendimentos.
+              <br />
+              Tudo em uma única plataforma.
+            </>
+          )}
         </p>
       </div>
 

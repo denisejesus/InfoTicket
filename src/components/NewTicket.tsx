@@ -1,7 +1,8 @@
 /**
- * InfoTicket - Modal de Abertura de Novo Chamado v1.13.0
+ * InfoTicket - Modal de Abertura de Novo Chamado v1.14.0
  * Vincula company_id, client_organization_id e cliente_id ao usuário autenticado ou ao cliente selecionado por Gestor/Gerente/Operador
- * Suporte a Arquitetura B2B2B: Seleção de Empresa Cliente (Organização), Solicitante e Anexos de Arquivos (Storage)
+ * Suporte a Arquitetura B2B2B: Seleção de Empresa Cliente (Organização), Solicitante e Anexos de Arquivos com Validação Estrita (5MB / Formatos Autorizados)
+ * Layout de Modal 100% Responsivo com Rolagem Interna e Rodapé Fixo no Mobile
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { 
@@ -20,6 +21,29 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { Profile, ClientOrganization } from '../types/database';
+
+const ALLOWED_EXTENSIONS = ['.png', '.jpeg', '.jpg', '.pdf', '.xls', '.xlsx', '.doc', '.docx'];
+const ALLOWED_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const UPLOAD_RULE_MESSAGE = 'Apenas imagens, PDF, Excel e Word até 5MB';
+
+const isFileValid = (file: File): boolean => {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return false;
+  }
+  const fileNameLower = file.name.toLowerCase();
+  const hasValidExt = ALLOWED_EXTENSIONS.some((ext) => fileNameLower.endsWith(ext));
+  const hasValidMime = !file.type || ALLOWED_MIME_TYPES.includes(file.type);
+  return hasValidExt && hasValidMime;
+};
 
 interface NewTicketProps {
   isOpen: boolean;
@@ -45,8 +69,9 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
   const [clientesList, setClientesList] = useState<Profile[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Anexos de Arquivos (Fase 13)
+  // Anexos de Arquivos (Fase 13) + Toast/Alerta de Validação
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadAlert, setUploadAlert] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
@@ -102,7 +127,30 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
-      setAttachments((prev) => [...prev, ...selectedFiles]);
+      const validFiles: File[] = [];
+      let hasInvalid = false;
+
+      for (const file of selectedFiles) {
+        if (!isFileValid(file)) {
+          hasInvalid = true;
+        } else {
+          validFiles.push(file);
+        }
+      }
+
+      if (hasInvalid) {
+        setUploadAlert(UPLOAD_RULE_MESSAGE);
+        setErrorMsg(UPLOAD_RULE_MESSAGE);
+      } else {
+        setUploadAlert(null);
+      }
+
+      if (validFiles.length > 0) {
+        setAttachments((prev) => [...prev, ...validFiles]);
+      }
+
+      // Limpa o valor do input para permitir selecionar novamente
+      e.target.value = '';
     }
   };
 
@@ -114,6 +162,14 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
     e.preventDefault();
     setErrorMsg(null);
     setUploadProgress(null);
+
+    // Bloqueio imediato de envio no frontend caso algum anexo na fila viole a regra de 5MB ou formato
+    const invalidAttachment = attachments.find((f) => !isFileValid(f));
+    if (invalidAttachment) {
+      setUploadAlert(UPLOAD_RULE_MESSAGE);
+      setErrorMsg(UPLOAD_RULE_MESSAGE);
+      return;
+    }
 
     if (!assunto.trim() || !descricao.trim()) {
       setErrorMsg('Por favor, preencha o assunto e a descrição do chamado.');
@@ -188,38 +244,61 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col text-slate-900">
-        {/* Header do Modal */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      {/* Toast Flutuante de Alerta de Upload */}
+      {uploadAlert && (
+        <div
+          role="alert"
+          className="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-[60] bg-rose-600 text-white px-4 py-3 rounded-xl shadow-lg border border-rose-500 flex items-center justify-between gap-3 animate-in fade-in duration-200"
+        >
+          <div className="flex items-center gap-2.5 text-xs font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0 text-white" />
+            <span>{uploadAlert}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUploadAlert(null)}
+            className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-rose-700 transition-colors"
+            aria-label="Fechar aviso"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col text-slate-900">
+        {/* Header Fixo do Modal */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold shrink-0">
               <TicketIcon className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Novo Chamado</h2>
-              <p className="text-[11px] text-slate-500">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900 leading-tight truncate">Novo Chamado</h2>
+              <p className="text-[11px] text-slate-500 truncate">
                 Empresa: <strong className="text-slate-700">{company?.razao_social || 'Multi-tenant'}</strong>
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={loading}
-            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Formulário */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 font-medium">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+        {/* Formulário com Rolagem Interna e Botões Fixos no Rodapé */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+            {errorMsg && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
           {/* B2B2B: Seletor em cascata: Primeiro Organização Cliente, depois Solicitante */}
           {isStaff && (
@@ -366,10 +445,14 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
                 ref={fileInputRef}
                 type="file"
                 multiple
+                accept=".png, .jpeg, .jpg, .pdf, .xls, .xlsx, .doc, .docx"
                 className="hidden"
                 onChange={handleFileChange}
               />
             </div>
+            <p className="text-[11px] text-slate-400">
+              Formatos aceitos: Imagens (.png, .jpg, .jpeg), PDF, Excel e Word (máx. 5MB por arquivo).
+            </p>
 
             {/* Lista de Arquivos Selecionados */}
             {attachments.length > 0 && (
@@ -416,13 +499,15 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
               </p>
             )}
           </div>
+          </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2.5">
+          {/* Rodapé Fixo com Botões Acessíveis no Mobile */}
+          <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors"
             >
               Cancelar
             </button>

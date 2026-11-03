@@ -1,7 +1,7 @@
 /**
- * TicketFlow - Relatórios Gerenciais v1.1.0
+ * TicketFlow - Relatórios Gerenciais v1.2.0
  * Análise executiva de Volume por Cliente, Desempenho da Equipe, Distribuição por Status e Cumprimento de Prazos
- * Suporte a Filtro de Período Personalizado (Data Inicial e Data Final)
+ * Suporte a Filtro de Período Personalizado (Data Inicial e Data Final) e Tabelas Responsivas com Rolagem Horizontal
  * Interface estritamente em Tema Claro (Light Mode) com Tailwind CSS e consumo de dados reais
  */
 import React, { useEffect, useState, useMemo } from 'react';
@@ -841,11 +841,11 @@ export const ReportsPage: React.FC<ReportsProps> = ({ activeCompany }) => {
 
                   return (
                     <div key={client.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-800 truncate max-w-[260px]">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                        <span className="font-bold text-slate-800 truncate max-w-full sm:max-w-[260px]">
                           {client.nome}
                         </span>
-                        <div className="flex items-center gap-3 text-[11px] font-semibold">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] font-semibold">
                           <span className="text-blue-600">{client.abertos} abertos</span>
                           <span className="text-amber-600">{client.emAtendimento} atend.</span>
                           <span className="text-emerald-600">{client.fechados} fechados</span>
@@ -923,7 +923,7 @@ export const ReportsPage: React.FC<ReportsProps> = ({ activeCompany }) => {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           {loading ? (
             <div className="p-10 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
@@ -934,14 +934,14 @@ export const ReportsPage: React.FC<ReportsProps> = ({ activeCompany }) => {
               Nenhuma organização cliente registrada para esta empresa.
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[640px] text-left text-xs border-collapse">
               <thead className="bg-slate-50 text-slate-600 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-3.5">Empresa Cliente</th>
-                  <th className="px-5 py-3.5 text-center">Chamados Abertos</th>
-                  <th className="px-5 py-3.5 text-center">Em Atendimento</th>
-                  <th className="px-5 py-3.5 text-center">Chamados Fechados</th>
-                  <th className="px-5 py-3.5 text-right">Total de Chamados</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Empresa Cliente</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">Chamados Abertos</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">Em Atendimento</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">Chamados Fechados</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">Total de Chamados</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
@@ -998,7 +998,7 @@ export const ReportsPage: React.FC<ReportsProps> = ({ activeCompany }) => {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           {loading ? (
             <div className="p-10 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
@@ -1009,14 +1009,14 @@ export const ReportsPage: React.FC<ReportsProps> = ({ activeCompany }) => {
               Nenhum operador, gerente ou gestor encontrado para esta empresa.
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[720px] text-left text-xs border-collapse">
               <thead className="bg-slate-50 text-slate-600 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-3.5">Nome do Operador</th>
-                  <th className="px-5 py-3.5 text-center">Total de Chamados Atribuídos</th>
-                  <th className="px-5 py-3.5 text-center">Chamados Fechados</th>
-                  <th className="px-5 py-3.5 text-center">SLAs Cumpridos (%)</th>
-                  <th className="px-5 py-3.5 text-right">Nota Média de Avaliação (CSAT)</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Nome do Operador</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">Total de Chamados Atribuídos</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">Chamados Fechados</th>
+                  <th className="px-5 py-3.5 text-center whitespace-nowrap">SLAs Cumpridos (%)</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">Nota Média de Avaliação (CSAT)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">

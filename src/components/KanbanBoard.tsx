@@ -1,9 +1,10 @@
 /**
- * TicketFlow - Quadro Kanban de Chamados v1.2.0
+ * TicketFlow - Quadro Kanban de Chamados v1.3.0
+ * Suporte a Deslizamento Horizontal em Smartphones/Tablets e Drag & Drop Híbrido (Mouse + Toque / Touch)
  * Intercepta o Drag & Drop para a coluna "Fechados", abrindo obrigatoriamente o CloseTicketModal
  * para exigir o preenchimento de `resumo_conclusao` antes do encerramento.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Building2, 
   User, 
@@ -12,7 +13,8 @@ import {
   CheckCircle2, 
   UserCheck, 
   ChevronRight,
-  Layers
+  Layers,
+  GripVertical
 } from 'lucide-react';
 import { Ticket, TicketStatus } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -91,7 +93,43 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   // Estado para o Modal Obrigatório de "Resumo de Conclusão" ao arrastar para "Fechados"
   const [ticketToClose, setTicketToClose] = useState<Ticket | null>(null);
 
-  // Manipulação de Drag & Drop (HTML5 nativo)
+  // Suporte a Drag & Drop por Toque (Mobile / Tablet)
+  const touchTimerRef = useRef<number | null>(null);
+  const touchTicketIdRef = useRef<string | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isTouchDraggingRef = useRef<boolean>(false);
+
+  // Função central que executa a mudança de coluna (compartilhada entre Mouse Drop e Touch Drop)
+  const executeColumnDrop = async (ticketId: string, targetStatus: TicketStatus) => {
+    const currentTicket = tickets.find((t) => t.id === ticketId);
+    if (!currentTicket) return;
+
+    // Se o status já for o mesmo (ou já estiver fechado ao soltar em Fechados), não faz nada
+    if (
+      currentTicket.status === targetStatus ||
+      (targetStatus === 'Fechado' && (currentTicket.status === 'Fechado' || currentTicket.status === 'Resolvido'))
+    ) {
+      return;
+    }
+
+    // REGRA DE NEGÓCIO CRÍTICA: Se a coluna de destino for "Fechados", NÃO dispara UPDATE direto.
+    // Abre obrigatoriamente o Modal de "Resumo de Conclusão".
+    if (targetStatus === 'Fechado') {
+      setTicketToClose(currentTicket);
+      return;
+    }
+
+    try {
+      setUpdatingTicketId(ticketId);
+      await onTicketStatusChange(ticketId, targetStatus);
+    } catch (err) {
+      console.error('Erro ao atualizar status via Kanban:', err);
+    } finally {
+      setUpdatingTicketId(null);
+    }
+  };
+
+  // Manipulação de Drag & Drop (HTML5 nativo - Desktop)
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, ticketId: string) => {
     if (!canDrag) return;
     setDraggedTicketId(ticketId);
@@ -128,31 +166,95 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     setDraggedTicketId(null);
     if (!ticketId) return;
 
-    const currentTicket = tickets.find((t) => t.id === ticketId);
-    if (!currentTicket) return;
+    await executeColumnDrop(ticketId, targetStatus);
+  };
 
-    // Se o status já for o mesmo (ou já estiver fechado ao soltar em Fechados), não faz nada
-    if (
-      currentTicket.status === targetStatus ||
-      (targetStatus === 'Fechado' && (currentTicket.status === 'Fechado' || currentTicket.status === 'Resolvido'))
-    ) {
+  // Manipulação de Drag & Drop por Toque (Mobile e Tablet)
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>, ticketId: string) => {
+    if (!canDrag) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    touchTicketIdRef.current = ticketId;
+    isTouchDraggingRef.current = false;
+
+    if (touchTimerRef.current) {
+      window.clearTimeout(touchTimerRef.current);
+    }
+
+    // Ativa o modo arraste após manter pressionado brevemente (220ms) para não bloquear o scroll normal
+    touchTimerRef.current = window.setTimeout(() => {
+      isTouchDraggingRef.current = true;
+      setDraggedTicketId(ticketId);
+    }, 220);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!canDrag || !touchTicketIdRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    // Se ainda não entrou em modo drag e o usuário moveu rápido, cancela o timer para permitir scroll normal
+    if (!isTouchDraggingRef.current && touchStartPosRef.current) {
+      const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+      const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+      if (dx > 10 || dy > 10) {
+        if (touchTimerRef.current) {
+          window.clearTimeout(touchTimerRef.current);
+          touchTimerRef.current = null;
+        }
+        return;
+      }
+    }
+
+    if (isTouchDraggingRef.current) {
+      // Identifica sobre qual coluna do Kanban o dedo está passando
+      const elementUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+      const colElement = elementUnderFinger?.closest('[data-kanban-col-id]') as HTMLElement | null;
+      const colId = colElement?.getAttribute('data-kanban-col-id') || null;
+      if (colId !== dragOverColumn) {
+        setDragOverColumn(colId);
+      }
+    }
+  };
+
+  const handleTouchEnd = async (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchTimerRef.current) {
+      window.clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+
+    if (!canDrag || !isTouchDraggingRef.current || !touchTicketIdRef.current) {
+      isTouchDraggingRef.current = false;
+      touchTicketIdRef.current = null;
+      setDraggedTicketId(null);
+      setDragOverColumn(null);
       return;
     }
 
-    // REGRA DE NEGÓCIO CRÍTICA: Se a coluna de destino for "Fechados", NÃO dispara UPDATE direto.
-    // Abre obrigatoriamente o Modal de "Resumo de Conclusão".
-    if (targetStatus === 'Fechado') {
-      setTicketToClose(currentTicket);
-      return;
+    const ticketId = touchTicketIdRef.current;
+    const touch = e.changedTouches[0];
+    let targetColId = dragOverColumn;
+
+    if (touch) {
+      const elementUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+      const colElement = elementUnderFinger?.closest('[data-kanban-col-id]') as HTMLElement | null;
+      if (colElement) {
+        targetColId = colElement.getAttribute('data-kanban-col-id');
+      }
     }
 
-    try {
-      setUpdatingTicketId(ticketId);
-      await onTicketStatusChange(ticketId, targetStatus);
-    } catch (err) {
-      console.error('Erro ao atualizar status via Kanban:', err);
-    } finally {
-      setUpdatingTicketId(null);
+    isTouchDraggingRef.current = false;
+    touchTicketIdRef.current = null;
+    setDraggedTicketId(null);
+    setDragOverColumn(null);
+
+    if (targetColId) {
+      const targetColumn = COLUMNS.find((c) => c.id === targetColId);
+      if (targetColumn) {
+        await executeColumnDrop(ticketId, targetColumn.targetStatus);
+      }
     }
   };
 
@@ -219,8 +321,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         </div>
       )}
 
-      {/* Grid das 4 Colunas Kanban */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+      {/* Dica de usabilidade mobile para arrastar ou deslizar */}
+      {canDrag && (
+        <div className="flex xl:hidden items-center justify-between gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-[11px] text-slate-600">
+          <span>Deslize para o lado para ver todas as colunas ou pressione e segure um card para movê-lo.</span>
+        </div>
+      )}
+
+      {/* Container com deslizamento horizontal no mobile/tablet e Grid 4 Colunas no Desktop (xl) */}
+      <div className="flex xl:grid xl:grid-cols-4 gap-3.5 sm:gap-4 overflow-x-auto pb-3 pt-0.5 snap-x snap-mandatory xl:overflow-visible items-start -mx-1 px-1">
         {COLUMNS.map((col) => {
           const colTickets = tickets.filter((t) =>
             col.matchStatuses.includes(t.status as TicketStatus)
@@ -230,10 +339,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           return (
             <div
               key={col.id}
+              data-kanban-col-id={col.id}
               onDragOver={(e) => handleDragOver(e, col.id)}
               onDragLeave={() => handleDragLeave(col.id)}
               onDrop={(e) => handleDrop(e, col.targetStatus)}
-              className={`flex flex-col rounded-xl border transition-all duration-200 ${
+              className={`min-w-[275px] sm:min-w-[300px] xl:min-w-0 w-[82vw] sm:w-[310px] xl:w-auto shrink-0 snap-center flex flex-col rounded-xl border transition-all duration-200 ${
                 isOver
                   ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-400/30'
                   : `${col.borderColor} bg-slate-50/60`
@@ -254,7 +364,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               </div>
 
               {/* Área dos Cards */}
-              <div className="p-2.5 space-y-2.5 min-h-[380px] max-h-[calc(100vh-280px)] overflow-y-auto">
+              <div className="p-2.5 space-y-2.5 min-h-[340px] max-h-[calc(100vh-280px)] overflow-y-auto">
                 {colTickets.length === 0 ? (
                   <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-lg bg-white/60 text-slate-400 text-xs">
                     <span>Nenhum chamado</span>
@@ -270,20 +380,32 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         draggable={canDrag}
                         onDragStart={(e) => handleDragStart(e, ticket.id)}
                         onDragEnd={handleDragEnd}
-                        onClick={() => onSelectTicket && onSelectTicket(ticket.id)}
+                        onTouchStart={(e) => handleTouchStart(e, ticket.id)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        onClick={() => {
+                          if (!isTouchDraggingRef.current && onSelectTicket) {
+                            onSelectTicket(ticket.id);
+                          }
+                        }}
                         className={`p-3 bg-white border border-slate-200 rounded-xl shadow-xs transition-all select-none ${
                           canDrag
                             ? 'cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-md'
                             : 'cursor-pointer hover:border-blue-300 hover:shadow-sm'
-                        } ${isDraggingThis ? 'opacity-40 scale-95 border-dashed border-blue-400' : ''} ${
+                        } ${isDraggingThis ? 'opacity-50 scale-95 border-dashed border-blue-500 ring-2 ring-blue-400/30' : ''} ${
                           isUpdatingThis ? 'animate-pulse pointer-events-none' : ''
                         }`}
                       >
                         {/* Linha Superior: ID e Tag SLA */}
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            #{ticket.id.substring(0, 8)}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {canDrag && (
+                              <GripVertical className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                            )}
+                            <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                              #{ticket.id.substring(0, 8)}
+                            </span>
+                          </div>
                           <div>{renderSlaBadge(ticket)}</div>
                         </div>
 

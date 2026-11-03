@@ -1,7 +1,8 @@
 /**
- * InfoTicket - Detalhes do Chamado, Omnichannel, Auditoria & CSAT v1.11.4
+ * InfoTicket - Detalhes do Chamado, Omnichannel, Auditoria & CSAT v1.12.0
  * Linha do tempo em tempo real com eventos de auditoria intercalados,
  * Seletor de Canal (E-mail / WhatsApp Chat4u condicional às credenciais da empresa), Macros, SLA e Avaliação CSAT
+ * Validação Estrita de Anexos (5MB / Formatos Autorizados) e Modais Responsivos para Mobile/Tablet
  * Isolamento Multi-tenant rigorosamente aplicado via RLS (company_id)
  */
 import React, { useEffect, useState, useRef } from 'react';
@@ -47,6 +48,29 @@ import { supabase } from '../lib/supabase';
 import { dataService } from '../services/dataService';
 import { Ticket, TicketMessage, Company, Macro, AuditLog, Profile, TicketAttachment, TicketStatus, CommunicationTemplate, ChatwootChannel } from '../types/database';
 import { CloseTicketModal } from '../components/CloseTicketModal';
+
+const ALLOWED_EXTENSIONS = ['.png', '.jpeg', '.jpg', '.pdf', '.xls', '.xlsx', '.doc', '.docx'];
+const ALLOWED_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const UPLOAD_RULE_MESSAGE = 'Apenas imagens, PDF, Excel e Word até 5MB';
+
+const isFileValid = (file: File): boolean => {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return false;
+  }
+  const fileNameLower = file.name.toLowerCase();
+  const hasValidExt = ALLOWED_EXTENSIONS.some((ext) => fileNameLower.endsWith(ext));
+  const hasValidMime = !file.type || ALLOWED_MIME_TYPES.includes(file.type);
+  return hasValidExt && hasValidMime;
+};
 
 interface TicketDetailsProps {
   ticketId: string;
@@ -142,10 +166,11 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   const [staffUsers, setStaffUsers] = useState<Profile[]>([]);
   const [assigningOperator, setAssigningOperator] = useState(false);
 
-  // Anexos do Chamado e Anexos da Resposta (Fase 13)
+  // Anexos do Chamado e Anexos da Resposta (Fase 13) + Toast de Validação
   const [ticketAttachments, setTicketAttachments] = useState<TicketAttachment[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [uploadAlert, setUploadAlert] = useState<string | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
 
   const hasChatwootConfig = Boolean(
@@ -470,6 +495,14 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Bloqueia imediatamente o envio caso exista qualquer arquivo inválido (acima de 5MB ou extensão não autorizada)
+    const invalidReplyFile = replyAttachments.find((f) => !isFileValid(f));
+    if (invalidReplyFile) {
+      setUploadAlert(UPLOAD_RULE_MESSAGE);
+      setSendError(UPLOAD_RULE_MESSAGE);
+      return;
+    }
 
     let messageToSend = content.trim();
 
@@ -804,6 +837,27 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
   return (
     <div className="space-y-6 font-sans antialiased text-slate-900">
+      {/* Toast Flutuante de Alerta de Upload */}
+      {uploadAlert && (
+        <div
+          role="alert"
+          className="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-[60] bg-rose-600 text-white px-4 py-3 rounded-xl shadow-lg border border-rose-500 flex items-center justify-between gap-3 animate-in fade-in duration-200"
+        >
+          <div className="flex items-center gap-2.5 text-xs font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0 text-white" />
+            <span>{uploadAlert}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUploadAlert(null)}
+            className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-rose-700 transition-colors"
+            aria-label="Fechar aviso"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Botão Voltar & Ações de Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <button
@@ -1915,11 +1969,34 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 ref={replyFileInputRef}
                 type="file"
                 multiple
+                accept=".png, .jpeg, .jpg, .pdf, .xls, .xlsx, .doc, .docx"
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files) {
                     const files = Array.from(e.target.files);
-                    setReplyAttachments((prev) => [...prev, ...files]);
+                    const validFiles: File[] = [];
+                    let hasInvalid = false;
+
+                    for (const file of files) {
+                      if (!isFileValid(file)) {
+                        hasInvalid = true;
+                      } else {
+                        validFiles.push(file);
+                      }
+                    }
+
+                    if (hasInvalid) {
+                      setUploadAlert(UPLOAD_RULE_MESSAGE);
+                      setSendError(UPLOAD_RULE_MESSAGE);
+                    } else {
+                      setUploadAlert(null);
+                    }
+
+                    if (validFiles.length > 0) {
+                      setReplyAttachments((prev) => [...prev, ...validFiles]);
+                    }
+
+                    e.target.value = '';
                   }
                 }}
               />
@@ -1931,6 +2008,9 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 </span>
               )}
             </div>
+            <p className="text-[11px] text-slate-400">
+              Formatos aceitos: Imagens (.png, .jpg, .jpeg), PDF, Excel e Word (máx. 5MB por arquivo).
+            </p>
 
             {/* Lista de Arquivos Selecionados para Enviar com a Resposta */}
             {replyAttachments.length > 0 && (
@@ -2024,10 +2104,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
       {/* MODAL DE RESPOSTAS RÁPIDAS (MACROS) */}
       {isMacroModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col text-slate-900 max-h-[85vh]">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col text-slate-900 max-h-[92vh] sm:max-h-[85vh]">
             {/* Header Modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 text-purple-700 font-bold">
                   <Zap className="w-4 h-4" />
@@ -2046,7 +2126,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
 
             {/* Conteúdo Modal */}
-            <div className="p-6 overflow-y-auto space-y-4">
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto space-y-4">
               {/* Barra de Busca & Botão Nova Macro */}
               <div className="flex items-center justify-between gap-3">
                 <div className="relative flex-1">
@@ -2154,7 +2234,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
 
             {/* Footer Modal */}
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+            <div className="px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsMacroModalOpen(false)}
@@ -2169,10 +2249,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
 
       {/* MODAL DE MODELOS DE RESPOSTA / TEMPLATES (communication_templates - Fase 14.1) */}
       {isTemplateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col text-slate-900 max-h-[85vh]">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col text-slate-900 max-h-[92vh] sm:max-h-[85vh]">
             {/* Header Modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold">
                   <FileText className="w-4 h-4" />
@@ -2193,7 +2273,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
 
             {/* Conteúdo Modal */}
-            <div className="p-6 overflow-y-auto space-y-4">
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto space-y-4">
               {/* Barra de Busca */}
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -2252,7 +2332,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
 
             {/* Footer Modal */}
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+            <div className="px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsTemplateModalOpen(false)}
