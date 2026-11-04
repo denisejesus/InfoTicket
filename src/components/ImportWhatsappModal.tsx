@@ -1,6 +1,7 @@
 /**
- * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.2.0
+ * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.3.0
  * Permite puxar conversas ativas do WhatsApp (Canais da empresa) e transformá-las em chamados no sistema.
+ * Cálculo dinâmico de SLA (sla_vencimento) baseado no sla_padrao_horas configurado pela empresa ativa.
  * Regra de Negócio: A ligação de identidade ocorre pelo número de WhatsApp; mesmo quando já existe
  * chamado anterior (exibindo o aviso azul), o botão "Abrir Chamado" SEMPRE força a criação de um novo chamado.
  * Layout 100% Responsivo no Smartphone com Rolagem Interna e Botões Fixos Acessíveis.
@@ -59,9 +60,9 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
   activeCompany,
   onImported,
 }) => {
-  const { user, company } = useAuth();
+  const { user, profile, company, activeCompanyId } = useAuth();
   const currentCompany = activeCompany || company;
-  const companyId = currentCompany?.id || '';
+  const companyId = activeCompanyId || currentCompany?.id || profile?.company_id || '';
 
   // Passo 1: Canais de WhatsApp
   const [channels, setChannels] = useState<ChatwootChannel[]>([]);
@@ -244,6 +245,22 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
 
     setImporting(true);
     try {
+      // Lê o sla_padrao_horas atualizado da empresa logada (via fetch ou AuthContext) e calcula sla_vencimento dinamicamente
+      const freshCompany = await dataService.getCompanyById(companyId);
+      const slaPadraoHoras =
+        freshCompany?.sla_padrao_horas && freshCompany.sla_padrao_horas > 0
+          ? freshCompany.sla_padrao_horas
+          : currentCompany?.sla_padrao_horas && currentCompany.sla_padrao_horas > 0
+          ? currentCompany.sla_padrao_horas
+          : null;
+
+      let slaVencimentoIso: string | undefined = undefined;
+      if (slaPadraoHoras && slaPadraoHoras > 0) {
+        const dataSla = new Date();
+        dataSla.setTime(dataSla.getTime() + slaPadraoHoras * 60 * 60 * 1000);
+        slaVencimentoIso = dataSla.toISOString();
+      }
+
       const response = await dataService.importWhatsappConversation({
         company_id: companyId,
         channel_id: selectedChannelId,
@@ -255,6 +272,8 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
         contact_phone: selectedConversation.contact_phone,
         custom_subject: customSubject.trim(),
         prioridade,
+        sla_padrao_horas: slaPadraoHoras,
+        sla_vencimento: slaVencimentoIso,
       });
 
       if (response && response.ticket_id) {

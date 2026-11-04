@@ -1,6 +1,6 @@
 /**
- * TicketFlow - Configurações da Empresa v1.20.0
- * Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
+ * TicketFlow - Configurações da Empresa v1.21.0
+ * Prazo Padrão de SLA Dinâmico, Servidor de E-mail Corporativo Multi-Tenant (SMTP), Integração Omnichannel Chat4u & Templates de Comunicação
  * Interface Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
  */
 import React, { useEffect, useState } from 'react';
@@ -29,14 +29,16 @@ import {
   Trash2,
   Plus,
   Server,
-  Send
+  Send,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/dataService';
 import { CommunicationTemplate, ChatwootChannel } from '../types/database';
 
 export const SettingsPage: React.FC = () => {
-  const { profile, company, loading: authLoading } = useAuth();
+  const { profile, company, activeCompanyId, loading: authLoading, refreshTenantData } = useAuth();
+  const targetCompanyId = activeCompanyId || company?.id || profile?.company_id || null;
 
   // Controle de permissão de acesso à tela: Apenas Gestor, Gerente ou Super Admin
   const normalizedRole = (profile?.role || '').trim().toLowerCase();
@@ -50,7 +52,12 @@ export const SettingsPage: React.FC = () => {
   // Regra de Negócio Crítica: Apenas Super Admin (Master) pode editar e testar os dados do Chat4u
   const isSuperAdmin = normalizedRole === 'super admin' || normalizedRole === 'super_admin';
 
-  const [activeTab, setActiveTab] = useState<'smtp' | 'integracoes' | 'templates'>('smtp');
+  const [activeTab, setActiveTab] = useState<'sla' | 'smtp' | 'integracoes' | 'templates'>('sla');
+
+  // Estado do Prazo Padrão de SLA da Empresa (SLA Dinâmico Multi-Tenant)
+  const [slaPadraoHoras, setSlaPadraoHoras] = useState<string>('');
+  const [savingSla, setSavingSla] = useState(false);
+  const [slaFeedback, setSlaFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Estado do Servidor SMTP Corporativo Multi-Tenant (Fase 18.1)
   const [smtpHost, setSmtpHost] = useState('');
@@ -96,6 +103,11 @@ export const SettingsPage: React.FC = () => {
   // Inicializa dados com base na empresa ativa da sessão
   useEffect(() => {
     if (company) {
+      setSlaPadraoHoras(
+        typeof company.sla_padrao_horas === 'number' && company.sla_padrao_horas > 0
+          ? String(company.sla_padrao_horas)
+          : ''
+      );
       setSmtpHost(company.smtp_host || '');
       setSmtpPort(company.smtp_port ? String(company.smtp_port) : '587');
       setSmtpUser(company.smtp_user || '');
@@ -111,7 +123,7 @@ export const SettingsPage: React.FC = () => {
       loadTemplates();
       loadChannels();
     }
-  }, [company?.id, profile?.email]);
+  }, [company?.id, company?.sla_padrao_horas, profile?.email]);
 
   const loadChannels = async () => {
     if (!company?.id) return;
@@ -198,6 +210,44 @@ export const SettingsPage: React.FC = () => {
     setTemplateAssunto(tmpl.assunto);
     setTemplateCorpo(tmpl.corpo_mensagem);
     setTemplateFeedback(null);
+  };
+
+  // 0.0 Salvar Prazo Padrão de SLA da Empresa (SLA Dinâmico Multi-Tenant - Gestor / Gerente / Super Admin)
+  const handleSaveSla = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!targetCompanyId) return;
+
+    const parsedHours = parseInt(slaPadraoHoras, 10);
+    if (isNaN(parsedHours) || parsedHours < 1) {
+      setSlaFeedback({
+        type: 'error',
+        message: 'Por favor, informe um prazo válido em horas (número inteiro maior ou igual a 1).',
+      });
+      return;
+    }
+
+    setSavingSla(true);
+    setSlaFeedback(null);
+
+    try {
+      const updated = await dataService.updateCompanySlaSettings(targetCompanyId, parsedHours);
+      if (updated && typeof updated.sla_padrao_horas === 'number') {
+        setSlaPadraoHoras(String(updated.sla_padrao_horas));
+      }
+      await refreshTenantData();
+      setSlaFeedback({
+        type: 'success',
+        message: `Prazo Padrão de SLA atualizado com sucesso para ${parsedHours}h na empresa ${company?.razao_social || ''}!`,
+      });
+    } catch (err: any) {
+      console.error('Erro ao salvar SLA:', err);
+      setSlaFeedback({
+        type: 'error',
+        message: err.message || 'Falha ao salvar o prazo padrão de SLA no banco de dados.',
+      });
+    } finally {
+      setSavingSla(false);
+    }
   };
 
   // 0. Salvar Configurações SMTP da Empresa (Fase 18.1 - Gestor / Super Admin)
@@ -483,7 +533,19 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {/* Navegação por Abas em Tema Claro */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('sla')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            activeTab === 'sla'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Clock className="w-4 h-4 text-blue-600" />
+          <span>Acordo de Nível de Serviço (SLA)</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('smtp')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
@@ -520,6 +582,107 @@ export const SettingsPage: React.FC = () => {
           <span>Templates de E-mail & WhatsApp</span>
         </button>
       </div>
+
+      {/* ABA SLA: PRAZO PADRÃO DE SLA DINÂMICO POR EMPRESA */}
+      {activeTab === 'sla' && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-6">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-700 rounded-lg">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Prazo Padrão de SLA da Empresa</h2>
+                  <p className="text-xs text-slate-500">
+                    Defina o tempo limite padrão (em horas) para resolução dos novos chamados abertos ou importados do WhatsApp nesta organização.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              SLA Atual: ~{slaPadraoHoras || company?.sla_padrao_horas || '—'}h
+            </span>
+          </div>
+
+          {slaFeedback && (
+            <div
+              className={`p-4 rounded-xl flex items-start gap-2.5 text-xs font-medium border ${
+                slaFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {slaFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <span>{slaFeedback.message}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveSla} className="space-y-4 max-w-xl">
+            <div>
+              <label htmlFor="sla-padrao-horas-input" className="block text-xs font-bold text-slate-700 mb-1.5">
+                Prazo Padrão de SLA (em horas) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative max-w-xs">
+                <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  id="sla-padrao-horas-input"
+                  type="number"
+                  min={1}
+                  step={1}
+                  required
+                  value={slaPadraoHoras}
+                  onChange={(e) => setSlaPadraoHoras(e.target.value)}
+                  placeholder="Ex: 8"
+                  className="w-full pl-9 pr-14 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+                <span className="absolute right-3 top-2.5 text-xs font-semibold text-slate-400 pointer-events-none">
+                  horas
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
+                Sempre que um novo chamado for aberto no sistema ou uma conversa for importada do WhatsApp, o vencimento do SLA será calculado somando este valor à data e hora de abertura.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-600">
+                <span className="font-semibold text-slate-800 block">Prévia da Tag de Abertura:</span>
+                <span>Como os novos chamados serão exibidos imediatamente após a criação:</span>
+              </div>
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                SLA no Prazo (~{slaPadraoHoras || company?.sla_padrao_horas || '—'}h)
+              </span>
+            </div>
+
+            <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+              <button
+                type="submit"
+                disabled={savingSla}
+                className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm shadow-blue-600/20 transition-all disabled:opacity-50"
+              >
+                {savingSla ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Salvando SLA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Salvar Prazo de SLA</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* ABA 0: SERVIDOR DE E-MAIL (SMTP MULTI-TENANT) */}
       {activeTab === 'smtp' && (

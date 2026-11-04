@@ -1,6 +1,6 @@
 /**
- * InfoTicket - Modal de Encerramento de Chamado v1.5.0
- * Valida obrigatoriamente o preenchimento de Resumo de Conclusão antes de alterar o status para 'Fechado'
+ * InfoTicket - Modal de Conclusão / Encerramento de Chamado v1.6.0
+ * Valida obrigatoriamente o preenchimento de Resumo de Conclusão antes de alterar o status para 'Resolvido' ou 'Fechado'
  * 100% Responsivo no Smartphone com Rolagem Interna e Botões Fixos Acessíveis
  */
 import React, { useState, useEffect } from 'react';
@@ -18,6 +18,7 @@ import { Ticket } from '../types/database';
 interface CloseTicketModalProps {
   ticket: Ticket | null;
   isOpen: boolean;
+  targetStatus?: 'Resolvido' | 'Fechado';
   onClose: () => void;
   onTicketClosed: () => void;
 }
@@ -25,6 +26,7 @@ interface CloseTicketModalProps {
 export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
   ticket,
   isOpen,
+  targetStatus = 'Fechado',
   onClose,
   onTicketClosed,
 }) => {
@@ -34,11 +36,14 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen && ticket) {
+      setResumoConclusao(ticket.resumo_conclusao || '');
+      setErrorMsg(null);
+    } else if (!isOpen) {
       setResumoConclusao('');
       setErrorMsg(null);
     }
-  }, [isOpen, ticket?.id]);
+  }, [isOpen, ticket?.id, ticket?.resumo_conclusao]);
 
   if (!isOpen || !ticket) return null;
 
@@ -64,18 +69,21 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
         ticket.id, 
         resumoConclusao.trim(), 
         user?.id || ticket.operador_id || undefined, 
-        ticket.company_id
+        ticket.company_id,
+        targetStatus
       );
       setResumoConclusao('');
       onTicketClosed();
       onClose();
     } catch (err: any) {
-      console.error('Erro ao encerrar chamado:', err);
+      console.error('Erro ao concluir chamado:', err);
       setErrorMsg(err.message || 'Falha ao atualizar chamado no Supabase.');
     } finally {
       setLoading(false);
     }
   };
+
+  const isResolvido = targetStatus === 'Resolvido';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -87,7 +95,9 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
               <FileCheck2 className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900 leading-tight truncate">Encerrar Chamado</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight truncate">
+                {isResolvido ? 'Marcar como Resolvido' : 'Encerrar Chamado'}
+              </h2>
               <p className="text-[11px] font-mono text-blue-600 truncate">
                 #{ticket.id.substring(0, 8)} - {ticket.assunto}
               </p>
@@ -121,12 +131,12 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
                 rows={4}
                 value={resumoConclusao}
                 onChange={(e) => setResumoConclusao(e.target.value)}
-                placeholder="Descreva a solução aplicada, ações tomadas e o motivo do encerramento do chamado..."
+                placeholder="Descreva a solução aplicada, ações tomadas e o motivo da conclusão do chamado..."
                 required
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-900 resize-none"
               />
               <p className="mt-1 text-[11px] text-slate-500">
-                Obrigatório: detalhe a conclusão para que o status mude para <strong>Fechado</strong>.
+                Obrigatório: detalhe a conclusão para que o status mude para <strong>{targetStatus}</strong>.
               </p>
             </div>
           </div>
@@ -148,12 +158,12 @@ export const CloseTicketModal: React.FC<CloseTicketModalProps> = ({
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Encerrando...</span>
+                  <span>{isResolvido ? 'Salvando...' : 'Encerrando...'}</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Confirmar Encerramento</span>
+                  <span>{isResolvido ? 'Confirmar Resolução' : 'Confirmar Encerramento'}</span>
                 </>
               )}
             </button>

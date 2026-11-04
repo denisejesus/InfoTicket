@@ -1,6 +1,7 @@
 /**
- * InfoTicket - Modal de Abertura de Novo Chamado v1.14.0
+ * InfoTicket - Modal de Abertura de Novo Chamado v1.15.0
  * Vincula company_id, client_organization_id e cliente_id ao usuário autenticado ou ao cliente selecionado por Gestor/Gerente/Operador
+ * Cálculo dinâmico de SLA (sla_vencimento) baseado no sla_padrao_horas configurado pela empresa ativa
  * Suporte a Arquitetura B2B2B: Seleção de Empresa Cliente (Organização), Solicitante e Anexos de Arquivos com Validação Estrita (5MB / Formatos Autorizados)
  * Layout de Modal 100% Responsivo com Rolagem Interna e Rodapé Fixo no Mobile
  */
@@ -52,7 +53,8 @@ interface NewTicketProps {
 }
 
 export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketCreated }) => {
-  const { user, profile, company } = useAuth();
+  const { user, profile, company, activeCompanyId } = useAuth();
+  const targetCompanyId = activeCompanyId || company?.id || profile?.company_id || '';
   
   // Identifica se o usuário atual é da equipe de atendimento ou cliente
   const isCliente = profile?.role === 'Cliente';
@@ -80,11 +82,11 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
 
   // Busca lista de organizações clientes e clientes do tenant caso o usuário seja da equipe
   useEffect(() => {
-    if (isOpen && isStaff && company?.id) {
+    if (isOpen && isStaff && targetCompanyId) {
       setLoadingData(true);
       Promise.all([
-        dataService.getClientOrganizations(company.id),
-        dataService.getCustomers(company.id),
+        dataService.getClientOrganizations(targetCompanyId),
+        dataService.getCustomers(targetCompanyId),
       ])
         .then(([orgs, customers]) => {
           setOrganizations(orgs as ClientOrganization[]);
@@ -102,7 +104,7 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
           setLoadingData(false);
         });
     }
-  }, [isOpen, isStaff, company?.id]);
+  }, [isOpen, isStaff, targetCompanyId]);
 
   // Filtra clientes da organização selecionada (ou clientes gerais se nenhuma organização for selecionada)
   const filteredClientes = clientesList.filter((c) => {
@@ -176,7 +178,7 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
       return;
     }
 
-    if (!company?.id || !user?.id) {
+    if (!targetCompanyId || !user?.id) {
       setErrorMsg('Erro de sessão multi-tenant. Dados da empresa ou do usuário não identificados.');
       return;
     }
@@ -197,18 +199,36 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
     setLoading(true);
 
     try {
-      // 1. Cria o chamado no Supabase
+      // 1. Lê o sla_padrao_horas atualizado da empresa logada (via fetch ou AuthContext) e calcula sla_vencimento dinamicamente
+      const freshCompany = await dataService.getCompanyById(targetCompanyId);
+      const slaPadraoHoras =
+        freshCompany?.sla_padrao_horas && freshCompany.sla_padrao_horas > 0
+          ? freshCompany.sla_padrao_horas
+          : company?.sla_padrao_horas && company.sla_padrao_horas > 0
+          ? company.sla_padrao_horas
+          : null;
+
+      let slaVencimentoIso: string | undefined = undefined;
+      if (slaPadraoHoras && slaPadraoHoras > 0) {
+        const dataSla = new Date();
+        dataSla.setTime(dataSla.getTime() + slaPadraoHoras * 60 * 60 * 1000);
+        slaVencimentoIso = dataSla.toISOString();
+      }
+
+      // 2. Cria o chamado no Supabase com o sla_vencimento dinâmico da empresa
       const createdTicket = await dataService.createTicket({
-        company_id: company.id,
+        company_id: targetCompanyId,
         client_organization_id: targetOrgId,
         cliente_id: targetClienteId,
         assunto: assunto.trim(),
         descricao: descricao.trim(),
         prioridade: prioridade,
         status: 'Aberto',
+        sla_vencimento: slaVencimentoIso,
+        sla_padrao_horas: slaPadraoHoras,
       });
 
-      // 2. Realiza o upload de anexos caso existam
+      // 3. Realiza o upload de anexos caso existam
       if (createdTicket && attachments.length > 0) {
         for (let i = 0; i < attachments.length; i++) {
           const file = attachments[i];
@@ -216,7 +236,7 @@ export const NewTicket: React.FC<NewTicketProps> = ({ isOpen, onClose, onTicketC
           try {
             await dataService.uploadTicketAttachment({
               file,
-              company_id: company.id,
+              company_id: targetCompanyId,
               ticket_id: createdTicket.id,
             });
           } catch (uploadErr) {

@@ -13,9 +13,12 @@ CREATE TABLE IF NOT EXISTS public.companies (
     cnpj VARCHAR(20) UNIQUE,
     status_trial VARCHAR(50) DEFAULT 'ativo', -- 'ativo', 'expirado', 'convertido'
     data_vencimento TIMESTAMPTZ,
+    sla_padrao_horas INT NOT NULL DEFAULT 4,
     criado_em TIMESTAMPTZ DEFAULT NOW(),
     atualizado_em TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS sla_padrao_horas INT NOT NULL DEFAULT 4;
 
 -- 2.1 Tabela de Organizações Clientes (Arquitetura B2B2B)
 CREATE TABLE IF NOT EXISTS public.client_organizations (

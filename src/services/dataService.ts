@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.26.0
+ * Serviço de dados do TicketFlow v1.28.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -698,21 +698,41 @@ export const dataService = {
   },
 
   /**
-   * Cria um novo chamado com cálculo automático de SLA de vencimento
+   * Cria um novo chamado com cálculo dinâmico de SLA de vencimento baseado no sla_padrao_horas da empresa
    */
-  async createTicket(ticket: Partial<Ticket>): Promise<Ticket | null> {
-    // Cálculo de SLA padrão (+4 horas úteis a partir de agora se não for informado)
-    let slaCalculado = ticket.sla_vencimento;
+  async createTicket(
+    ticket: Partial<Ticket> & { sla_padrao_horas?: number | null }
+  ): Promise<Ticket | null> {
+    const { sla_padrao_horas: inputSlaHours, ...ticketPayload } = ticket;
+    let slaCalculado = ticketPayload.sla_vencimento;
+
     if (!slaCalculado) {
+      let horasSla: number | null =
+        typeof inputSlaHours === 'number' && inputSlaHours > 0 ? inputSlaHours : null;
+
+      if (!horasSla && ticketPayload.company_id) {
+        const { data: compData } = await supabase
+          .from('companies')
+          .select('sla_padrao_horas')
+          .eq('id', ticketPayload.company_id)
+          .maybeSingle();
+
+        if (compData && typeof compData.sla_padrao_horas === 'number' && compData.sla_padrao_horas > 0) {
+          horasSla = compData.sla_padrao_horas;
+        }
+      }
+
       const dataSla = new Date();
-      dataSla.setHours(dataSla.getHours() + 4);
-      slaCalculado = dataSla.toISOString();
+      if (horasSla && horasSla > 0) {
+        dataSla.setTime(dataSla.getTime() + horasSla * 60 * 60 * 1000);
+        slaCalculado = dataSla.toISOString();
+      }
     }
 
     const { data, error } = await supabase
       .from('tickets')
       .insert({
-        ...ticket,
+        ...ticketPayload,
         sla_vencimento: slaCalculado,
       })
       .select()
@@ -859,13 +879,19 @@ export const dataService = {
   },
 
   /**
-   * Encerra um chamado definindo o status para Fechado, preenchendo o resumo e registrando log de auditoria
+   * Conclui ou encerra um chamado definindo o status ('Resolvido' ou 'Fechado'), preenchendo o resumo_conclusao e registrando na linha do tempo e auditoria
    */
-  async closeTicket(ticketId: string, resumoConclusao: string, userId?: string, companyId?: string): Promise<Ticket | null> {
+  async closeTicket(
+    ticketId: string,
+    resumoConclusao: string,
+    userId?: string,
+    companyId?: string,
+    targetStatus: 'Resolvido' | 'Fechado' = 'Fechado'
+  ): Promise<Ticket | null> {
     const { data, error } = await supabase
       .from('tickets')
       .update({
-        status: 'Fechado',
+        status: targetStatus,
         resumo_conclusao: resumoConclusao,
         atualizado_em: new Date().toISOString(),
       })
@@ -878,7 +904,7 @@ export const dataService = {
       throw error;
     }
 
-    // Registra mensagem de sistema e log de auditoria do encerramento
+    // Registra mensagem de sistema e log de auditoria do encerramento/resolução
     if (data && (companyId || data.company_id)) {
       const tenantId = companyId || data.company_id;
 
@@ -890,7 +916,7 @@ export const dataService = {
             ticket_id: ticketId,
             company_id: tenantId,
             user_id: userId,
-            content: `O status do chamado foi alterado para: Fechado. Resumo da Solução: ${resumoConclusao.trim()}`,
+            content: `O status do chamado foi alterado para: ${targetStatus}. Resumo da Solução: ${resumoConclusao.trim()}`,
             channel: 'sistema',
             is_internal_note: false,
           });
@@ -904,7 +930,7 @@ export const dataService = {
           company_id: tenantId,
           ticket_id: ticketId,
           user_id: userId,
-          acao: `Encerrou o chamado com status Fechado. Resumo: "${resumoConclusao.substring(0, 60)}${resumoConclusao.length > 60 ? '...' : ''}"`,
+          acao: `Concluiu o chamado com status ${targetStatus}. Resumo: "${resumoConclusao.substring(0, 60)}${resumoConclusao.length > 60 ? '...' : ''}"`,
         });
       } catch (auditErr) {
         console.warn('Aviso ao registrar auditoria de encerramento:', auditErr);
@@ -1257,6 +1283,31 @@ export const dataService = {
 
     if (error) {
       console.error('Erro ao salvar integrações Chat4u:', error.message);
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * Atualiza o Prazo Padrão de SLA (em horas) da Empresa (Multi-Tenant)
+   */
+  async updateCompanySlaSettings(
+    companyId: string,
+    slaPadraoHoras: number
+  ): Promise<Company | null> {
+    const validHours = Math.max(1, Math.floor(Number(slaPadraoHoras)));
+    const { data, error } = await supabase
+      .from('companies')
+      .update({
+        sla_padrao_horas: validHours,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao salvar prazo padrão de SLA:', error.message);
       throw error;
     }
     return data;
@@ -1867,6 +1918,8 @@ export const dataService = {
     contact_phone?: string;
     custom_subject?: string;
     prioridade?: string;
+    sla_padrao_horas?: number | null;
+    sla_vencimento?: string;
   }): Promise<{
     success: boolean;
     ticket_id: string;
@@ -1916,7 +1969,7 @@ export const dataService = {
       // 3. Fallback Resiliente de Importação (caso a Edge Function ainda não tenha sido publicada no Supabase)
       const { data: companyRow } = await supabase
         .from('companies')
-        .select('id, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id')
+        .select('id, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id, sla_padrao_horas')
         .eq('id', params.company_id)
         .single();
 
@@ -1963,8 +2016,21 @@ export const dataService = {
         validMessages[0]?.content ||
         `Atendimento importado do WhatsApp (${displayContact}).`;
 
-      const slaDate = new Date();
-      slaDate.setHours(slaDate.getHours() + 4);
+      let slaVencimentoIso = params.sla_vencimento;
+      if (!slaVencimentoIso) {
+        const horasSla =
+          typeof params.sla_padrao_horas === 'number' && params.sla_padrao_horas > 0
+            ? params.sla_padrao_horas
+            : typeof companyRow?.sla_padrao_horas === 'number' && companyRow.sla_padrao_horas > 0
+            ? companyRow.sla_padrao_horas
+            : null;
+
+        if (horasSla && horasSla > 0) {
+          const slaDate = new Date();
+          slaDate.setTime(slaDate.getTime() + horasSla * 60 * 60 * 1000);
+          slaVencimentoIso = slaDate.toISOString();
+        }
+      }
 
       const { data: createdTicket, error: insertErr } = await supabase
         .from('tickets')
@@ -1977,7 +2043,7 @@ export const dataService = {
           descricao: String(firstIncoming).trim(),
           status: params.operador_id ? 'Em Andamento' : 'Aberto',
           prioridade: params.prioridade || 'Média',
-          sla_vencimento: slaDate.toISOString(),
+          sla_vencimento: slaVencimentoIso,
           chatwoot_conversation_id: Number(params.conversation_id) || params.conversation_id,
         })
         .select('id')

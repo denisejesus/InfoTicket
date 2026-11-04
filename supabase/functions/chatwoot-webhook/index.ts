@@ -2,9 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * InfoTicket - Chatwoot Webhook Edge Function v1.8.0
+ * InfoTicket - Chatwoot Webhook Edge Function v1.9.0
  * Endpoint para recebimento assíncrono de mensagens e conversas originadas do Chat4u / Chatwoot
- * Cria ou atualiza chamados e interações no InfoTicket
+ * Cria ou atualiza chamados e interações no InfoTicket com cálculo dinâmico de SLA (sla_padrao_horas)
  */
 
 const corsHeaders = {
@@ -117,9 +117,27 @@ serve(async (req: Request) => {
 
       let targetTicketId = existingTicket?.id;
 
-      // 2. Se não existir, oficializa e cria o novo chamado na tabela tickets
+      // 2. Se não existir, oficializa e cria o novo chamado na tabela tickets com SLA dinâmico da empresa
       if (!targetTicketId) {
         console.log(`📋 Criando novo chamado na tabela tickets para a conversa #${conversationId}...`);
+
+        let slaVencimentoIso: string | null = null;
+        try {
+          const { data: compRow } = await supabase
+            .from("companies")
+            .select("sla_padrao_horas")
+            .eq("id", companyId)
+            .maybeSingle();
+
+          if (compRow && typeof compRow.sla_padrao_horas === "number" && compRow.sla_padrao_horas > 0) {
+            const slaDate = new Date();
+            slaDate.setTime(slaDate.getTime() + compRow.sla_padrao_horas * 60 * 60 * 1000);
+            slaVencimentoIso = slaDate.toISOString();
+          }
+        } catch (slaErr) {
+          console.warn("⚠️ Aviso ao consultar sla_padrao_horas da empresa no webhook:", slaErr);
+        }
+
         const { data: newTicket, error: ticketError } = await supabase
           .from("tickets")
           .insert({
@@ -130,6 +148,7 @@ serve(async (req: Request) => {
             descricao: messageContent,
             status: "Aberto",
             prioridade: "Média",
+            sla_vencimento: slaVencimentoIso,
           })
           .select("id")
           .single();

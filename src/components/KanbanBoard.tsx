@@ -1,8 +1,7 @@
 /**
- * TicketFlow - Quadro Kanban de Chamados v1.3.0
+ * TicketFlow - Quadro Kanban de Chamados v1.6.0
  * Suporte a Deslizamento Horizontal em Smartphones/Tablets e Drag & Drop Híbrido (Mouse + Toque / Touch)
- * Intercepta o Drag & Drop para a coluna "Fechados", abrindo obrigatoriamente o CloseTicketModal
- * para exigir o preenchimento de `resumo_conclusao` antes do encerramento.
+ * Tag de SLA Dinâmica sem quebra de linha (whitespace-nowrap) e bloqueio de encerramento/resolução sem resumo via CloseTicketModal
  */
 import React, { useState, useRef } from 'react';
 import { 
@@ -66,13 +65,22 @@ const COLUMNS: ColumnConfig[] = [
     bgColor: 'bg-amber-50/40',
   },
   {
-    id: 'fechados',
-    title: 'Fechados',
-    targetStatus: 'Fechado',
-    matchStatuses: ['Fechado', 'Resolvido'],
+    id: 'resolvido',
+    title: 'Resolvido',
+    targetStatus: 'Resolvido',
+    matchStatuses: ['Resolvido'],
     badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     borderColor: 'border-emerald-200',
     bgColor: 'bg-emerald-50/40',
+  },
+  {
+    id: 'fechados',
+    title: 'Fechados',
+    targetStatus: 'Fechado',
+    matchStatuses: ['Fechado'],
+    badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
+    borderColor: 'border-slate-300',
+    bgColor: 'bg-slate-50/60',
   },
 ];
 
@@ -90,8 +98,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
 
-  // Estado para o Modal Obrigatório de "Resumo de Conclusão" ao arrastar para "Fechados"
+  // Estado para o Modal Obrigatório de "Resumo de Conclusão" ao arrastar para "Resolvido" ou "Fechados"
   const [ticketToClose, setTicketToClose] = useState<Ticket | null>(null);
+  const [closeTargetStatus, setCloseTargetStatus] = useState<'Resolvido' | 'Fechado'>('Fechado');
 
   // Suporte a Drag & Drop por Toque (Mobile / Tablet)
   const touchTimerRef = useRef<number | null>(null);
@@ -104,17 +113,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     const currentTicket = tickets.find((t) => t.id === ticketId);
     if (!currentTicket) return;
 
-    // Se o status já for o mesmo (ou já estiver fechado ao soltar em Fechados), não faz nada
-    if (
-      currentTicket.status === targetStatus ||
-      (targetStatus === 'Fechado' && (currentTicket.status === 'Fechado' || currentTicket.status === 'Resolvido'))
-    ) {
+    // Se o status já for o mesmo, não faz nada
+    if (currentTicket.status === targetStatus) {
       return;
     }
 
-    // REGRA DE NEGÓCIO CRÍTICA: Se a coluna de destino for "Fechados", NÃO dispara UPDATE direto.
+    // REGRA DE NEGÓCIO CRÍTICA: Se a coluna de destino for "Resolvido" ou "Fechados", NÃO dispara UPDATE direto.
     // Abre obrigatoriamente o Modal de "Resumo de Conclusão".
-    if (targetStatus === 'Fechado') {
+    if (targetStatus === 'Resolvido' || targetStatus === 'Fechado') {
+      setCloseTargetStatus(targetStatus);
       setTicketToClose(currentTicket);
       return;
     }
@@ -258,23 +265,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   };
 
-  // Helper para renderizar tag do SLA
+  // Helper para renderizar tag do SLA (sempre em linha única com whitespace-nowrap)
   const renderSlaBadge = (ticket: Ticket) => {
     const isFechado = ticket.status === 'Fechado' || ticket.status === 'Resolvido';
 
     if (isFechado) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          Concluído
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap shrink-0">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+          <span>Concluído</span>
         </span>
       );
     }
 
     if (!ticket.sla_vencimento) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
-          Sem SLA
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap shrink-0">
+          <span>Sem SLA</span>
         </span>
       );
     }
@@ -285,26 +292,28 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
     if (diffHours < 0) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-          <AlertCircle className="w-3 h-3 text-red-600" />
-          SLA Vencido
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 whitespace-nowrap shrink-0">
+          <AlertCircle className="w-3 h-3 text-red-600 shrink-0" />
+          <span>SLA Vencido</span>
         </span>
       );
     }
 
     if (diffHours <= 2) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-          <Clock className="w-3 h-3 text-amber-600" />
-          Atenção
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap shrink-0">
+          <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+          <span>Atenção (&lt; 2h)</span>
         </span>
       );
     }
 
+    const horasRestantes = Math.max(1, Math.round(diffHours));
+
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <Clock className="w-3 h-3 text-emerald-600" />
-        No Prazo
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0">
+        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+        <span>SLA no Prazo (~{horasRestantes}h)</span>
       </span>
     );
   };
@@ -328,8 +337,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         </div>
       )}
 
-      {/* Container com deslizamento horizontal no mobile/tablet e Grid 4 Colunas no Desktop (xl) */}
-      <div className="flex xl:grid xl:grid-cols-4 gap-3.5 sm:gap-4 overflow-x-auto pb-3 pt-0.5 snap-x snap-mandatory xl:overflow-visible items-start -mx-1 px-1">
+      {/* Container com deslizamento horizontal no mobile/tablet e Grid 5 Colunas no Desktop (xl) */}
+      <div className="flex xl:grid xl:grid-cols-5 gap-3.5 sm:gap-4 overflow-x-auto pb-3 pt-0.5 snap-x snap-mandatory xl:overflow-visible items-start -mx-1 px-1">
         {COLUMNS.map((col) => {
           const colTickets = tickets.filter((t) =>
             col.matchStatuses.includes(t.status as TicketStatus)
@@ -397,16 +406,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         }`}
                       >
                         {/* Linha Superior: ID e Tag SLA */}
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
+                          <div className="flex items-center gap-0.5 shrink-0">
                             {canDrag && (
-                              <GripVertical className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                              <GripVertical className="w-3.5 h-3.5 text-slate-300 shrink-0 -ml-1" />
                             )}
-                            <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">
                               #{ticket.id.substring(0, 8)}
                             </span>
                           </div>
-                          <div>{renderSlaBadge(ticket)}</div>
+                          {renderSlaBadge(ticket)}
                         </div>
 
                         {/* Assunto / Título do Chamado */}
@@ -434,14 +443,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
 
                         {/* Rodapé do Card: Operador Responsável e Ação */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 text-[11px]">
                           {ticket.operador?.nome ? (
                             <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium max-w-[150px] truncate">
                               <UserCheck className="w-3 h-3 flex-shrink-0" />
                               <span className="truncate">{ticket.operador.nome}</span>
                             </div>
                           ) : (
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 whitespace-nowrap">
                               Não Atribuído
                             </span>
                           )}
@@ -468,10 +477,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         })}
       </div>
 
-      {/* Modal Obrigatório de Resumo de Conclusão ao arrastar para "Fechados" */}
+      {/* Modal Obrigatório de Resumo de Conclusão ao arrastar para "Resolvido" ou "Fechados" */}
       <CloseTicketModal
         ticket={ticketToClose}
         isOpen={Boolean(ticketToClose)}
+        targetStatus={closeTargetStatus}
         onClose={() => {
           // Cancelamento: fecha o modal e mantém o card intacto na coluna original
           setTicketToClose(null);

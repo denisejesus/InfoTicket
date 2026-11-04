@@ -1,5 +1,5 @@
 /**
- * InfoTicket - Painel Analítico & Dashboard v1.12.0
+ * InfoTicket - Painel Analítico & Dashboard v1.13.0
  * Visão Especializada para Clientes (Boas-vindas, Atalhos Diretos e Zero Jargão Técnico)
  * Métricas em tempo real com dados reais do Supabase (Zero Mocks) para equipe de Gestão/Operação
  * Estritamente em Tema Claro (Light Mode) com Tailwind CSS e Isolamento Multi-tenant via RLS
@@ -634,9 +634,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeCompany, onNavigateT
                         </span>
                       );
                     } else {
+                      const horasRestantes = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
                       slaTag = (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          No Prazo
+                          SLA no Prazo (~{horasRestantes}h)
                         </span>
                       );
                     }

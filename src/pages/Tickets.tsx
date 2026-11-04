@@ -1,7 +1,7 @@
 /**
- * TicketFlow - Página "Meus Chamados" v1.14.0
- * Listagem com SLA Visual (Vencido, Atenção, No Prazo), alternância Lista/Quadros com persistência,
- * Importação de conversas ativas do WhatsApp, bloqueio de encerramento sem resumo no Kanban e navegação.
+ * TicketFlow - Página "Meus Chamados" v1.16.0
+ * Listagem com SLA Visual Dinâmico (Vencido, Atenção, SLA no Prazo (~Xh)), alternância Lista/Quadros com persistência,
+ * Importação de conversas ativas do WhatsApp, bloqueio de encerramento/resolução sem resumo no Kanban e navegação.
  * 100% Responsiva para tablets e smartphones com rolagem horizontal na listagem.
  * Isolamento Multi-tenant garantido pelo Supabase RLS através da sessão do AuthContext
  */
@@ -103,8 +103,8 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
   }, [currentCompany?.id]);
 
   const handleTicketStatusChange = async (ticketId: string, newStatus: TicketStatus) => {
-    // Trava de segurança: nenhum chamado pode ser encerrado diretamente sem o Resumo de Conclusão
-    if (newStatus === 'Fechado') {
+    // Trava de segurança: nenhum chamado pode ser encerrado ou marcado como resolvido diretamente sem o Resumo de Conclusão
+    if (newStatus === 'Fechado' || newStatus === 'Resolvido') {
       return;
     }
 
@@ -227,6 +227,7 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
               { label: 'Abertos', value: 'Aberto' },
               { label: 'Em Atendimento', value: 'Em Andamento' },
               { label: 'Aguardando Cliente', value: 'Aguardando Cliente' },
+              { label: 'Resolvidos', value: 'Resolvido' },
               { label: 'Fechados', value: 'Fechado' },
             ].map((tab) => {
               const active = statusFilter === tab.value;
@@ -386,11 +387,11 @@ export const Tickets: React.FC<TicketsProps> = ({ activeCompany, onSelectTicket 
                         </span>
                       );
                     } else {
-                      const horasRestantes = Math.round(diffHours);
+                      const horasRestantes = Math.max(1, Math.round(diffHours));
                       slaBadge = (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          No Prazo (~{horasRestantes}h)
+                          SLA no Prazo (~{horasRestantes}h)
                         </span>
                       );
                     }

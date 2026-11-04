@@ -1,7 +1,7 @@
 /**
- * InfoTicket - Detalhes do Chamado, Omnichannel, Auditoria & CSAT v1.12.0
+ * InfoTicket - Detalhes do Chamado, Omnichannel, Auditoria & CSAT v1.14.0
  * Linha do tempo em tempo real com eventos de auditoria intercalados,
- * Seletor de Canal (E-mail / WhatsApp Chat4u condicional às credenciais da empresa), Macros, SLA e Avaliação CSAT
+ * Seletor de Canal (E-mail / WhatsApp Chat4u condicional às credenciais da empresa), Macros, SLA Dinâmico e Avaliação CSAT
  * Validação Estrita de Anexos (5MB / Formatos Autorizados) e Modais Responsivos para Mobile/Tablet
  * Isolamento Multi-tenant rigorosamente aplicado via RLS (company_id)
  */
@@ -153,8 +153,9 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   const [newMacroConteudo, setNewMacroConteudo] = useState('');
   const [savingMacro, setSavingMacro] = useState(false);
 
-  // Modal de Encerramento
+  // Modal de Conclusão / Encerramento (Resolvido ou Fechado)
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [closeModalTargetStatus, setCloseModalTargetStatus] = useState<'Resolvido' | 'Fechado'>('Fechado');
 
   // Controle de Visualização da Linha do Tempo: alternar logs técnicos/auditoria
   const [showTechnicalLogs, setShowTechnicalLogs] = useState(false);
@@ -338,7 +339,8 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!ticket || ticket.status === newStatus || updatingStatus) return;
 
-    if (newStatus === 'Fechado') {
+    if (newStatus === 'Resolvido' || newStatus === 'Fechado') {
+      setCloseModalTargetStatus(newStatus);
       setIsCloseModalOpen(true);
       return;
     }
@@ -747,6 +749,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   });
 
   const isFechado = ticket?.status === 'Fechado' || ticket?.status === 'Resolvido';
+  const isStrictlyClosed = ticket?.status === 'Fechado';
 
   // Filtra macros no modal
   const filteredMacros = macros.filter((m) =>
@@ -878,9 +881,12 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
           </button>
 
           {/* Botão de Encerrar Chamado */}
-          {!isFechado ? (
+          {!isStrictlyClosed ? (
             <button
-              onClick={() => setIsCloseModalOpen(true)}
+              onClick={() => {
+                setCloseModalTargetStatus('Fechado');
+                setIsCloseModalOpen(true);
+              }}
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm shadow-emerald-500/20 transition-all"
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -905,7 +911,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </span>
 
             {/* Status Dropdown / Badge */}
-            {profile?.role !== 'Cliente' && !isFechado ? (
+            {profile?.role !== 'Cliente' && !isStrictlyClosed ? (
               <div className="relative inline-flex items-center">
                 <select
                   value={ticket.status}
@@ -925,6 +931,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   <option value="Aberto">Status: Aberto</option>
                   <option value="Em Andamento">Status: Em Atendimento</option>
                   <option value="Aguardando Cliente">Status: Aguardando Cliente</option>
+                  <option value="Resolvido">Status: Marcar como Resolvido...</option>
                   <option value="Fechado">Status: Fechar Chamado...</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 pointer-events-none" />
@@ -985,10 +992,11 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </span>
                 );
               } else {
+                const horasRestantes = Math.max(1, Math.round(diffHours));
                 return (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    SLA no Prazo (~{Math.round(diffHours)}h)
+                    SLA no Prazo (~{horasRestantes}h)
                   </span>
                 );
               }
@@ -2345,10 +2353,11 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
       )}
 
-      {/* Modal de Encerramento com Resumo Obrigatório */}
+      {/* Modal de Conclusão / Encerramento com Resumo Obrigatório */}
       <CloseTicketModal
         ticket={ticket}
         isOpen={isCloseModalOpen}
+        targetStatus={closeModalTargetStatus}
         onClose={() => setIsCloseModalOpen(false)}
         onTicketClosed={() => {
           loadTicketData(false);

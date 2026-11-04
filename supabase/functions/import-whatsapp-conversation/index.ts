@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - Import WhatsApp Conversation Edge Function v1.0.1
+ * TicketFlow - Import WhatsApp Conversation Edge Function v1.1.0
  * Importa uma conversa ativa do WhatsApp (Chat4u), cria o chamado na tabela `tickets`
  * vinculando Organização (`client_organization_id`) e Solicitante (`cliente_id`),
+ * calcula `sla_vencimento` dinamicamente a partir de `sla_padrao_horas` da empresa,
  * e reconstrói todo o histórico de mensagens em `ticket_messages`.
  */
 
@@ -25,6 +26,8 @@ interface ImportConversationPayload {
   contact_phone?: string;
   custom_subject?: string;
   prioridade?: string;
+  sla_padrao_horas?: number | null;
+  sla_vencimento?: string;
 }
 
 serve(async (req: Request) => {
@@ -52,6 +55,8 @@ serve(async (req: Request) => {
       contact_phone,
       custom_subject,
       prioridade,
+      sla_padrao_horas: payloadSlaHoras,
+      sla_vencimento: payloadSlaVencimento,
     } = payload;
 
     if (!company_id || !conversation_id || !client_organization_id || !cliente_id) {
@@ -81,10 +86,10 @@ serve(async (req: Request) => {
       auth: { persistSession: false },
     });
 
-    // 1. Busca as credenciais da empresa ativa
+    // 1. Busca as credenciais e o prazo padrão de SLA da empresa ativa
     const { data: company, error: companyErr } = await supabase
       .from("companies")
-      .select("id, razao_social, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id")
+      .select("id, razao_social, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id, sla_padrao_horas")
       .eq("id", company_id)
       .single();
 
@@ -166,9 +171,22 @@ serve(async (req: Request) => {
       validMessages[0]?.content ||
       `Atendimento importado do WhatsApp (${displayContact}).`;
 
-    // Cálculo padrão de SLA (+4 horas a partir da criação do chamado)
-    const slaDate = new Date();
-    slaDate.setHours(slaDate.getHours() + 4);
+    // Cálculo dinâmico de SLA baseado no sla_padrao_horas da empresa
+    let slaVencimentoIso = payloadSlaVencimento;
+    if (!slaVencimentoIso) {
+      const slaHoras =
+        typeof company.sla_padrao_horas === "number" && company.sla_padrao_horas > 0
+          ? company.sla_padrao_horas
+          : typeof payloadSlaHoras === "number" && payloadSlaHoras > 0
+          ? payloadSlaHoras
+          : null;
+
+      if (slaHoras && slaHoras > 0) {
+        const slaDate = new Date();
+        slaDate.setTime(slaDate.getTime() + slaHoras * 60 * 60 * 1000);
+        slaVencimentoIso = slaDate.toISOString();
+      }
+    }
 
     // 4. INSERT na tabela `tickets`
     const { data: createdTicket, error: ticketInsertErr } = await supabase
@@ -182,7 +200,7 @@ serve(async (req: Request) => {
         descricao: String(firstIncomingMessage).trim(),
         status: operador_id ? "Em Andamento" : "Aberto",
         prioridade: prioridade || "Média",
-        sla_vencimento: slaDate.toISOString(),
+        sla_vencimento: slaVencimentoIso || null,
         chatwoot_conversation_id: Number(conversation_id) || String(conversation_id),
       })
       .select("id")

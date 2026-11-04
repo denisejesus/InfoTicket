@@ -1,5 +1,5 @@
 /**
- * Modelos TypeScript do Banco de Dados InfoTicket v1.19.0
+ * Modelos TypeScript do Banco de Dados InfoTicket v1.20.0
  */
 
 export type UserRole = 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Operador/Funcionário' | 'Cliente';
@@ -81,6 +81,7 @@ export interface Company {
   smtp_password?: string | null;
   smtp_from_email?: string | null;
   smtp_from_name?: string | null;
+  sla_padrao_horas?: number | null;
   criado_em?: string;
   atualizado_em?: string;
   profiles?: Profile[];

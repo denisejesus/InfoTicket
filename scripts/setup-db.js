@@ -383,13 +383,14 @@ ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_api_access_token 
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_account_id INT;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS chatwoot_inbox_id INT;
 
--- 10.1 Servidor de E-mail Corporativo Multi-Tenant (Fase 18.1 - SMTP)
+-- 10.1 Servidor de E-mail Corporativo Multi-Tenant (Fase 18.1 - SMTP) & SLA Dinâmico
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_port INT;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_password VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_email VARCHAR(255);
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS smtp_from_name VARCHAR(255);
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS sla_padrao_horas INT NOT NULL DEFAULT 4;
 
 -- 11. Tabela de Templates de Comunicação (communication_templates)
 CREATE TABLE IF NOT EXISTS public.communication_templates (
