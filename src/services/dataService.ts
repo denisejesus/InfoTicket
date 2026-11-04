@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.28.0
+ * Serviço de dados do TicketFlow v1.29.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -1872,6 +1872,29 @@ export const dataService = {
           (contactSuffix8 ? existingPhoneMap.get(contactSuffix8) : undefined) ||
           existingMap.get(String(conv.id));
 
+        const recentMessages = msgs
+          .filter((m: any) => m?.message_type !== 2 && m?.message_type !== 'activity' && m?.content && String(m.content).trim().length > 0)
+          .sort((a: any, b: any) => {
+            const tA = typeof a.created_at === 'number' ? a.created_at * 1000 : new Date(a.created_at || 0).getTime();
+            const tB = typeof b.created_at === 'number' ? b.created_at * 1000 : new Date(b.created_at || 0).getTime();
+            return tA - tB;
+          })
+          .slice(-5)
+          .map((m: any) => {
+            const isIncoming = m.message_type === 0 || m.message_type === 'incoming';
+            return {
+              id: m.id,
+              sender: m?.sender?.name || (isIncoming ? (sender?.name || 'Cliente') : 'Atendente'),
+              is_incoming: isIncoming,
+              content: String(m.content).trim(),
+              created_at: m.created_at
+                ? typeof m.created_at === 'number'
+                  ? new Date(m.created_at * 1000).toISOString()
+                  : new Date(m.created_at).toISOString()
+                : isoDate,
+            };
+          });
+
         return {
           conversation_id: conv.id,
           contact_name: sender?.name || 'Contato WhatsApp',
@@ -1884,6 +1907,7 @@ export const dataService = {
           status: conv?.status || 'open',
           existing_ticket_id: existing?.id || null,
           existing_ticket_subject: existing?.assunto || null,
+          recent_messages: recentMessages,
         };
       });
 
@@ -1902,6 +1926,125 @@ export const dataService = {
       }
       throw err;
     }
+  },
+
+  /**
+   * Busca as últimas interações (3 a 5 mensagens) de uma conversa ativa do WhatsApp para preview antes de gerar o chamado
+   */
+  async getWhatsappConversationPreview(params: {
+    company_id: string;
+    conversation_id: number | string;
+    contact_name?: string;
+    fallback_messages?: Array<{
+      id?: string | number;
+      sender: string;
+      is_incoming: boolean;
+      content: string;
+      created_at?: string;
+    }>;
+    fallback_last_message?: string;
+  }): Promise<Array<{
+    id?: string | number;
+    sender: string;
+    is_incoming: boolean;
+    content: string;
+    created_at?: string;
+  }>> {
+    try {
+      const { data, error } = await supabase.functions.invoke('import-whatsapp-conversation', {
+        body: {
+          action: 'preview',
+          company_id: params.company_id,
+          conversation_id: params.conversation_id,
+          contact_name: params.contact_name,
+        },
+      });
+
+      if (!error && data && Array.isArray(data.preview_messages) && data.preview_messages.length > 0) {
+        return data.preview_messages.slice(-5);
+      }
+
+      // Fallback direto na API da empresa caso a Edge Function ainda não tenha o modo preview publicado
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('id, chatwoot_url, chatwoot_api_access_token, chatwoot_account_id')
+        .eq('id', params.company_id)
+        .single();
+
+      if (companyRow?.chatwoot_url && companyRow?.chatwoot_api_access_token && companyRow?.chatwoot_account_id) {
+        const cleanBaseUrl = companyRow.chatwoot_url.replace(/\/+$/, '');
+        try {
+          const msgRes = await fetch(
+            `${cleanBaseUrl}/api/v1/accounts/${companyRow.chatwoot_account_id}/conversations/${params.conversation_id}/messages`,
+            {
+              method: 'GET',
+              headers: {
+                api_access_token: companyRow.chatwoot_api_access_token,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          if (msgRes.ok) {
+            const msgJson = await msgRes.json();
+            const rawMsgs = Array.isArray(msgJson?.payload)
+              ? msgJson.payload
+              : Array.isArray(msgJson?.data?.payload)
+              ? msgJson.data.payload
+              : Array.isArray(msgJson)
+              ? msgJson
+              : [];
+
+            const previewList = rawMsgs
+              .filter((m: any) => m?.message_type !== 2 && m?.message_type !== 'activity' && m?.content && String(m.content).trim().length > 0)
+              .sort((a: any, b: any) => {
+                const tA = typeof a.created_at === 'number' ? a.created_at * 1000 : new Date(a.created_at || 0).getTime();
+                const tB = typeof b.created_at === 'number' ? b.created_at * 1000 : new Date(b.created_at || 0).getTime();
+                return tA - tB;
+              })
+              .slice(-5)
+              .map((m: any) => {
+                const isIncoming = m.message_type === 0 || m.message_type === 'incoming';
+                return {
+                  id: m.id,
+                  sender: m?.sender?.name || (isIncoming ? (params.contact_name || 'Cliente') : 'Atendente'),
+                  is_incoming: isIncoming,
+                  content: String(m.content).trim(),
+                  created_at: m.created_at
+                    ? typeof m.created_at === 'number'
+                      ? new Date(m.created_at * 1000).toISOString()
+                      : new Date(m.created_at).toISOString()
+                    : undefined,
+                };
+              });
+
+            if (previewList.length > 0) {
+              return previewList;
+            }
+          }
+        } catch (_err) {
+          // Segue para o fallback local da conversa
+        }
+      }
+    } catch (_err) {
+      // Segue para fallback local
+    }
+
+    if (params.fallback_messages && params.fallback_messages.length > 0) {
+      return params.fallback_messages.slice(-5);
+    }
+
+    if (params.fallback_last_message) {
+      return [
+        {
+          id: 'last',
+          sender: params.contact_name || 'Cliente',
+          is_incoming: true,
+          content: params.fallback_last_message,
+        },
+      ];
+    }
+
+    return [];
   },
 
   /**
@@ -2067,6 +2210,7 @@ export const dataService = {
             user_id: isIncoming ? params.cliente_id : params.operador_id || params.cliente_id,
             content: String(m.content).trim(),
             is_internal_note: Boolean(m.private),
+            is_imported: true,
             channel: 'whatsapp',
             created_at: createdIso,
           };
@@ -2079,6 +2223,7 @@ export const dataService = {
           user_id: params.cliente_id,
           content: String(firstIncoming).trim(),
           is_internal_note: false,
+          is_imported: true,
           channel: 'whatsapp',
         });
       }

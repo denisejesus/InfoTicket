@@ -248,6 +248,32 @@ serve(async (req: Request) => {
         existingConvMap.get(String(conv.id)) ||
         null;
 
+      // Extrai as últimas interações (até 5 mensagens reais) caso venham no payload da conversa
+      const validConvMessages = messages
+        .filter((m: any) => m?.message_type !== 2 && m?.message_type !== "activity" && m?.content && String(m.content).trim().length > 0)
+        .sort((a: any, b: any) => {
+          const tA = typeof a.created_at === "number" ? a.created_at * 1000 : new Date(a.created_at || 0).getTime();
+          const tB = typeof b.created_at === "number" ? b.created_at * 1000 : new Date(b.created_at || 0).getTime();
+          return tA - tB;
+        })
+        .slice(-5)
+        .map((m: any) => {
+          const isIncoming = m.message_type === 0 || m.message_type === "incoming";
+          const senderLabel = m?.sender?.name || (isIncoming ? (sender?.name || "Cliente") : "Atendente");
+          const createdIso = m.created_at
+            ? typeof m.created_at === "number"
+              ? new Date(m.created_at * 1000).toISOString()
+              : new Date(m.created_at).toISOString()
+            : lastActivityIso;
+          return {
+            id: m.id,
+            sender: senderLabel,
+            is_incoming: isIncoming,
+            content: String(m.content).trim(),
+            created_at: createdIso,
+          };
+        });
+
       return {
         conversation_id: conv.id,
         inbox_id: conv.inbox_id || targetInboxId,
@@ -263,6 +289,7 @@ serve(async (req: Request) => {
         already_imported: Boolean(linkedTicket),
         existing_ticket_id: linkedTicket?.ticket_id || null,
         existing_ticket_status: linkedTicket?.status || null,
+        recent_messages: validConvMessages,
       };
     });
 

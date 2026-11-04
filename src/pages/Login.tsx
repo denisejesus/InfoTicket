@@ -1,6 +1,6 @@
 /**
- * TicketFlow - Tela de Login v1.5.0
- * Autenticação via Supabase Auth com Tema Claro Estrito e Recuperação/Redefinição de Senha
+ * TicketFlow - Tela de Login v1.6.0
+ * Autenticação via Supabase Auth com Tema Claro Estrito, Recuperação/Redefinição de Senha e Aviso de Sessão Expirada
  * Identidade visual oficial TicketFlow integrada
  */
 import React, { useState } from 'react';
@@ -246,7 +246,9 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, onNavigateRegister }) =
                 <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-800 text-xs font-medium animate-in fade-in duration-200">
                   <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="font-bold block">Falha de Autenticação / Permissão</span>
+                    <span className="font-bold block">
+                      {activeDisplayError.includes('inatividade') ? 'Sessão Expirada' : 'Falha de Autenticação / Permissão'}
+                    </span>
                     <span className="text-rose-700">{activeDisplayError}</span>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 /**
- * InfoTicket - AuthContext v1.14.0
+ * InfoTicket - AuthContext v1.15.0
  * Contexto de Autenticação e Gestão de Sessão Multi-tenant Supabase
- * Suporte a Context Switcher para Super Admin (activeCompanyId)
+ * Suporte a Context Switcher para Super Admin (activeCompanyId), Auto-Logoff por Inatividade (1 hora = 3.600.000 ms),
  * Feedback visual de alerta para inconsistências de perfil e proteção contra sessão fantasma
  */
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -9,6 +9,10 @@ import { User, Session } from '@supabase/supabase-js';
 import { AlertCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Profile, Company } from '../types/database';
+
+const INACTIVITY_TIMEOUT_MS = 3600000; // 1 hora (3.600.000 ms)
+const INACTIVITY_EXPIRED_MESSAGE = 'Sua sessão expirou por inatividade.';
+const INACTIVITY_STORAGE_KEY = 'ticketflow_session_expired_notice';
 
 interface AuthContextType {
   user: User | null;
@@ -33,7 +37,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompany] = useState<Company | null>(null);
   const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(() => {
+    try {
+      const savedNotice = sessionStorage.getItem(INACTIVITY_STORAGE_KEY);
+      if (savedNotice) {
+        sessionStorage.removeItem(INACTIVITY_STORAGE_KEY);
+        return savedNotice;
+      }
+    } catch (_e) {
+      // ignora erro de sessionStorage
+    }
+    return null;
+  });
 
   // Busca dados de Perfil e Empresa para o usuário autenticado
   const fetchUserData = async (currentUserId: string): Promise<boolean> => {
@@ -171,6 +186,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveCompanyIdState(null);
     setLoading(false);
   };
+
+  // Monitoramento de Inatividade do Usuário (Auto-Logoff após 1 hora = 3.600.000 ms)
+  useEffect(() => {
+    if (!user) return;
+
+    let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleSessionTimeout = async () => {
+      try {
+        sessionStorage.setItem(INACTIVITY_STORAGE_KEY, INACTIVITY_EXPIRED_MESSAGE);
+      } catch (_e) {
+        // ignora erro de sessionStorage
+      }
+      setAuthError(INACTIVITY_EXPIRED_MESSAGE);
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setCompany(null);
+      setActiveCompanyIdState(null);
+
+      // Redireciona a URL para a tela de login mantendo o basePath
+      if (typeof window !== 'undefined') {
+        const base = window.location.pathname.startsWith('/ticketflow') ? '/ticketflow' : '';
+        const loginPath = `${base}/login`;
+        if (window.location.pathname !== loginPath) {
+          window.history.pushState({}, '', loginPath);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      }
+    };
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      inactivityTimer = setTimeout(handleSessionTimeout, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click', 'scroll'];
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, resetInactivityTimer, { passive: true });
+    });
+
+    // Inicia o temporizador imediatamente ao autenticar
+    resetInactivityTimer();
+
+    return () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, resetInactivityTimer);
+      });
+    };
+  }, [user?.id]);
 
   return (
     <AuthContext.Provider

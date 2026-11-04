@@ -2,11 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - Import WhatsApp Conversation Edge Function v1.1.0
+ * TicketFlow - Import WhatsApp Conversation Edge Function v1.2.0
  * Importa uma conversa ativa do WhatsApp (Chat4u), cria o chamado na tabela `tickets`
  * vinculando Organização (`client_organization_id`) e Solicitante (`cliente_id`),
  * calcula `sla_vencimento` dinamicamente a partir de `sla_padrao_horas` da empresa,
- * e reconstrói todo o histórico de mensagens em `ticket_messages`.
+ * reconstrói todo o histórico de mensagens em `ticket_messages` com `is_imported: true` (anti-loop)
+ * e suporta `action: "preview"` para leitura rápida das últimas interações antes de gerar o chamado.
  */
 
 const corsHeaders = {
@@ -16,11 +17,12 @@ const corsHeaders = {
 };
 
 interface ImportConversationPayload {
+  action?: "preview" | "import";
   company_id: string;
   channel_id?: string;
   conversation_id: number | string;
-  client_organization_id: string;
-  cliente_id: string;
+  client_organization_id?: string;
+  cliente_id?: string;
   operador_id?: string | null;
   contact_name?: string;
   contact_phone?: string;
@@ -46,6 +48,7 @@ serve(async (req: Request) => {
 
     const payload: ImportConversationPayload = await req.json();
     const {
+      action = "import",
       company_id,
       conversation_id,
       client_organization_id,
@@ -59,7 +62,9 @@ serve(async (req: Request) => {
       sla_vencimento: payloadSlaVencimento,
     } = payload;
 
-    if (!company_id || !conversation_id || !client_organization_id || !cliente_id) {
+    const isPreviewOnly = action === "preview";
+
+    if (!company_id || !conversation_id || (!isPreviewOnly && (!client_organization_id || !cliente_id))) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -160,6 +165,45 @@ serve(async (req: Request) => {
         return tA - tB;
       });
 
+    // Se a requisição for apenas de preview (leitura rápida das últimas 5 mensagens antes de gerar chamado)
+    if (isPreviewOnly) {
+      const fallbackContactName = contact_name?.trim() || "Cliente";
+      const lastFive = validMessages.slice(-5).map((m: any) => {
+        const isIncoming = m.message_type === 0 || m.message_type === "incoming";
+        const senderName =
+          m?.sender?.name ||
+          (isIncoming ? fallbackContactName : "Atendente");
+
+        let contentStr = m.content ? String(m.content).trim() : "";
+        if (!contentStr && Array.isArray(m.attachments) && m.attachments.length > 0) {
+          contentStr = "(Mensagem de mídia / anexo)";
+        }
+
+        const createdIso = m.created_at
+          ? typeof m.created_at === "number"
+            ? new Date(m.created_at * 1000).toISOString()
+            : new Date(m.created_at).toISOString()
+          : new Date().toISOString();
+
+        return {
+          id: m.id,
+          sender: senderName,
+          is_incoming: isIncoming,
+          content: contentStr || "(Sem texto)",
+          created_at: createdIso,
+        };
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          preview_messages: lastFive,
+          total_messages: validMessages.length,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // 3. Monta o Assunto e a Descrição Inicial do Chamado
     const displayContact = contact_name?.trim() || contact_phone?.trim() || `Conversa #${conversation_id}`;
     const finalSubject =
@@ -252,6 +296,7 @@ serve(async (req: Request) => {
           user_id: isIncoming ? cliente_id : operador_id || cliente_id,
           content: contentStr || "(Mensagem de mídia)",
           is_internal_note: isPrivate,
+          is_imported: true,
           channel: "whatsapp",
           created_at: createdIso,
         };
@@ -265,13 +310,14 @@ serve(async (req: Request) => {
         console.warn("⚠️ Aviso ao inserir histórico de mensagens importadas:", msgInsertErr.message);
       }
     } else {
-      // Caso a conversa ainda não possua mensagens retornadas, registra a mensagem inicial
+      // Caso a conversa ainda não possua mensagens retornadas, registra a mensagem inicial como importada
       await supabase.from("ticket_messages").insert({
         ticket_id: newTicketId,
         company_id,
         user_id: cliente_id,
         content: String(firstIncomingMessage).trim(),
         is_internal_note: false,
+        is_imported: true,
         channel: "whatsapp",
       });
     }

@@ -1,6 +1,7 @@
 /**
- * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.3.0
+ * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.4.0
  * Permite puxar conversas ativas do WhatsApp (Canais da empresa) e transformá-las em chamados no sistema.
+ * Inclui Área de Leitura Rápida (Preview das últimas 3 a 5 interações) para validar o contexto antes de Gerar Chamado.
  * Cálculo dinâmico de SLA (sla_vencimento) baseado no sla_padrao_horas configurado pela empresa ativa.
  * Regra de Negócio: A ligação de identidade ocorre pelo número de WhatsApp; mesmo quando já existe
  * chamado anterior (exibindo o aviso azul), o botão "Abrir Chamado" SEMPRE força a criação de um novo chamado.
@@ -33,6 +34,14 @@ import {
   Profile
 } from '../types/database';
 
+interface PreviewMessageItem {
+  id?: string | number;
+  sender: string;
+  is_incoming: boolean;
+  content: string;
+  created_at?: string;
+}
+
 interface WhatsappConversationItem {
   conversation_id: number;
   contact_name: string;
@@ -45,6 +54,7 @@ interface WhatsappConversationItem {
   status: string;
   existing_ticket_id: string | null;
   existing_ticket_subject: string | null;
+  recent_messages?: PreviewMessageItem[];
 }
 
 interface ImportWhatsappModalProps {
@@ -83,9 +93,11 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
   const [customSubject, setCustomSubject] = useState<string>('');
   const [prioridade, setPrioridade] = useState<'Baixa' | 'Média' | 'Alta' | 'Urgente'>('Média');
 
-  // Estados de importação e feedback
+  // Estados de importação, preview e feedback
   const [importing, setImporting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewMessages, setPreviewMessages] = useState<PreviewMessageItem[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
 
   // Carrega canais de WhatsApp, Organizações e Solicitantes ao abrir o modal
   useEffect(() => {
@@ -169,13 +181,31 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
   };
 
   // Quando o operador clica em uma conversa para importar (Passo 3)
-  const handleSelectConversation = (conv: WhatsappConversationItem) => {
+  const handleSelectConversation = async (conv: WhatsappConversationItem) => {
     setErrorMsg(null);
     setSelectedConversation(conv);
 
     const defaultAssunto = `Atendimento WhatsApp - ${conv.contact_name || conv.contact_phone || `#${conv.conversation_id}`}`;
     setCustomSubject(defaultAssunto);
     setPrioridade('Média');
+
+    // Inicializa com as mensagens recentes já presentes na listagem (se houver) e busca as últimas 3 a 5 interações completas
+    const initialPreview: PreviewMessageItem[] =
+      conv.recent_messages && conv.recent_messages.length > 0
+        ? conv.recent_messages.slice(-5)
+        : conv.last_message
+        ? [
+            {
+              id: 'last',
+              sender: conv.contact_name || 'Cliente',
+              is_incoming: true,
+              content: conv.last_message,
+              created_at: conv.last_activity_at,
+            },
+          ]
+        : [];
+
+    setPreviewMessages(initialPreview);
 
     // Tenta localizar automaticamente o Solicitante e a Organização pelo número de WhatsApp
     const cleanConvPhone = (conv.contact_phone || '').replace(/\D/g, '');
@@ -200,6 +230,25 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
       setSelectedOrgId(firstOrgId);
       const orgCustomers = customers.filter((c) => !firstOrgId || c.client_organization_id === firstOrgId);
       setSelectedClienteId(orgCustomers[0]?.id || '');
+    }
+
+    // Busca as últimas interações (3 a 5 mensagens) da conversa selecionada para leitura rápida
+    setLoadingPreview(true);
+    try {
+      const fetchedPreview = await dataService.getWhatsappConversationPreview({
+        company_id: companyId,
+        conversation_id: conv.conversation_id,
+        contact_name: conv.contact_name,
+        fallback_messages: initialPreview,
+        fallback_last_message: conv.last_message,
+      });
+      if (fetchedPreview && fetchedPreview.length > 0) {
+        setPreviewMessages(fetchedPreview.slice(-5));
+      }
+    } catch (_previewErr) {
+      // Mantém initialPreview caso a busca complementar falhe
+    } finally {
+      setLoadingPreview(false);
     }
   };
 
@@ -666,6 +715,66 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                 </div>
               </div>
 
+              {/* ÁREA DE LEITURA RÁPIDA: PREVIEW / RESUMO DAS ÚLTIMAS INTERAÇÕES (3 A 5 MENSAGENS) */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-800">
+                      Resumo das Últimas Interações ({previewMessages.length})
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-500">
+                    Confira o contexto antes de gerar o chamado
+                  </span>
+                </div>
+
+                {loadingPreview && previewMessages.length <= 1 ? (
+                  <div className="py-4 px-3 bg-white border border-slate-200 rounded-lg flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>Carregando últimas mensagens da conversa...</span>
+                  </div>
+                ) : previewMessages.length === 0 ? (
+                  <div className="py-3 px-3 bg-white border border-slate-200 rounded-lg text-xs text-slate-500 text-center">
+                    Nenhuma mensagem de texto recente disponível para pré-visualização.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {previewMessages.slice(-5).map((msg, idx) => (
+                      <div
+                        key={msg.id || idx}
+                        className={`p-2.5 rounded-lg border text-xs ${
+                          msg.is_incoming
+                            ? 'bg-white border-slate-200 text-slate-800'
+                            : 'bg-emerald-50/60 border-emerald-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span
+                            className={`font-bold text-[11px] ${
+                              msg.is_incoming ? 'text-blue-700' : 'text-emerald-800'
+                            }`}
+                          >
+                            {msg.sender || (msg.is_incoming ? selectedConversation.contact_name || 'Cliente' : 'Atendente')}
+                          </span>
+                          {msg.created_at && (
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {msg.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
@@ -688,7 +797,7 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Importar e Abrir Chamado</span>
+                      <span>Gerar Chamado</span>
                     </>
                   )}
                 </button>

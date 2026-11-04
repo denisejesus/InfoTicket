@@ -2,10 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * InfoTicket - Send WhatsApp Official Message Edge Function v1.16.4
+ * InfoTicket - Send WhatsApp Official Message Edge Function v1.17.0
  * Dispara mensagens oficiais de WhatsApp (Template Messages) via API do Chatwoot / Chat4u
  * POST /api/v1/accounts/{account_id}/conversations/{conversation_id}/messages
- * Suporta canais múltiplos (chatwoot_channels) e templates homologados pela Meta
+ * Suporta canais múltiplos (chatwoot_channels), templates homologados pela Meta
+ * e proteção Anti-Loop: ignora mensagens com is_imported === true.
  */
 
 const corsHeaders = {
@@ -22,6 +23,7 @@ interface SendWhatsAppOfficialPayload {
   whatsapp_template_variables?: Record<string, any> | null;
   content?: string;
   message_id?: string;
+  is_imported?: boolean;
   cliente_nome?: string | null;
   cliente_whatsapp?: string | null;
   cliente_email?: string | null;
@@ -51,10 +53,24 @@ serve(async (req: Request) => {
       whatsapp_template_variables,
       content,
       message_id,
+      is_imported,
       cliente_nome: payloadClienteNome,
       cliente_whatsapp: payloadClienteWhatsapp,
       cliente_email: payloadClienteEmail,
     } = payload;
+
+    // Trava Anti-Loop imediata se vier is_imported == true no payload
+    if (is_imported === true) {
+      console.log("ℹ️ [Anti-Loop] Mensagem marcada como is_imported == true. Ignorando disparo no WhatsApp.");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          message: "Mensagem importada do histórico ignorada (is_imported = true).",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!ticket_id || !company_id) {
       return new Response(
@@ -170,19 +186,30 @@ serve(async (req: Request) => {
 
     clienteNome = clienteNome || "Cliente InfoTicket";
 
-    // 4. Resolve template_name, variáveis e texto da mensagem
+    // 4. Resolve template_name, variáveis, texto da mensagem e verifica se é mensagem importada (is_imported)
     let templateName = whatsapp_template_name;
     let templateVariables = whatsapp_template_variables;
     let messageContent = content;
 
-    if (message_id && (!templateName || !templateVariables || !messageContent)) {
+    if (message_id) {
       const { data: msg } = await supabase
         .from("ticket_messages")
-        .select("content, channel, is_internal_note, whatsapp_template_name, whatsapp_template_variables")
+        .select("content, channel, is_internal_note, is_imported, whatsapp_template_name, whatsapp_template_variables")
         .eq("id", message_id)
         .maybeSingle();
 
       if (msg) {
+        if (msg.is_imported === true || msg.is_internal_note === true) {
+          console.log(`ℹ️ [Anti-Loop] Mensagem #${message_id} ignorada (is_imported=${msg.is_imported}, is_internal_note=${msg.is_internal_note}).`);
+          return new Response(
+            JSON.stringify({
+              success: true,
+              skipped: true,
+              message: "Mensagem importada ou nota interna ignorada para evitar loop.",
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         templateName = templateName || msg.whatsapp_template_name;
         templateVariables = templateVariables || msg.whatsapp_template_variables;
         messageContent = messageContent || msg.content;

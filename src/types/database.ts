@@ -1,5 +1,5 @@
 /**
- * Modelos TypeScript do Banco de Dados InfoTicket v1.20.0
+ * Modelos TypeScript do Banco de Dados InfoTicket v1.21.0
  */
 
 export type UserRole = 'Super Admin' | 'Gestor' | 'Gerente' | 'Operador' | 'Operador/Funcionário' | 'Cliente';
@@ -29,6 +29,7 @@ export interface TicketMessage {
   user_id: string;
   content: string;
   is_internal_note: boolean;
+  is_imported?: boolean;
   channel: string;
   whatsapp_template_name?: string | null;
   whatsapp_template_variables?: Record<string, any> | null;

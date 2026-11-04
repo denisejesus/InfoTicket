@@ -162,7 +162,7 @@ serve(async (req: Request) => {
         console.log(`✅ Chamado criado com sucesso: ID ${targetTicketId} (Cliente: ${clienteId || "Não identificado"})`);
       }
 
-      // 3. Insere a mensagem correspondente na linha do tempo (ticket_messages)
+      // 3. Insere a mensagem correspondente na linha do tempo (ticket_messages) com is_imported = true para evitar loop
       if (targetTicketId && payload.content) {
         const { error: msgError } = await supabase
           .from("ticket_messages")
@@ -172,6 +172,7 @@ serve(async (req: Request) => {
             user_id: clienteId,
             content: payload.content,
             is_internal_note: payload.private || false,
+            is_imported: true,
             channel: "whatsapp",
           });
 

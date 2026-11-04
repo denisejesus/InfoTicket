@@ -108,22 +108,22 @@ serve(async (req: Request) => {
     }
 
     let messageContent = payload.content;
-    if (!messageContent && message_id) {
+    if (message_id) {
       const { data: msg } = await supabase
         .from("ticket_messages")
-        .select("content, channel, is_internal_note")
+        .select("content, channel, is_internal_note, is_imported")
         .eq("id", message_id)
         .maybeSingle();
 
       if (msg) {
-        if (msg.is_internal_note) {
-          console.log("ℹ️ Mensagem é uma nota interna. Disparo no WhatsApp ignorado.");
+        if (msg.is_internal_note || msg.is_imported) {
+          console.log("ℹ️ Mensagem é uma nota interna ou histórico importado. Disparo no WhatsApp ignorado.");
           return new Response(
-            JSON.stringify({ success: true, message: "Nota interna ignorada." }),
+            JSON.stringify({ success: true, skipped: true, message: "Nota interna ou mensagem importada ignorada." }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        messageContent = msg.content;
+        messageContent = messageContent || msg.content;
       }
     }
 

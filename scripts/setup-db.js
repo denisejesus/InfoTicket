@@ -1,6 +1,6 @@
 /**
- * InfoTicket - Database Automation Script (JS version) v1.18.1
- * Configuração Completa do Banco Multi-Tenant, Triggers de Notificação, Chat4u, Templates, SLA, CSAT e Organizações B2B2B
+ * InfoTicket - Database Automation Script (JS version) v1.19.0
+ * Configuração Completa do Banco Multi-Tenant, Triggers de Notificação, Chat4u, Templates, SLA, CSAT, is_imported e Organizações B2B2B
  */
 import fs from 'fs';
 import path from 'path';
@@ -222,11 +222,14 @@ CREATE TABLE IF NOT EXISTS public.ticket_messages (
     user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     content TEXT NOT NULL,
     is_internal_note BOOLEAN NOT NULL DEFAULT FALSE,
+    is_imported BOOLEAN NOT NULL DEFAULT FALSE,
     channel VARCHAR(50) NOT NULL DEFAULT 'sistema',
     whatsapp_template_name VARCHAR(255),
     whatsapp_template_variables JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.ticket_messages ADD COLUMN IF NOT EXISTS is_imported BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Índices para performance da timeline
 CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON public.ticket_messages(ticket_id);
@@ -514,14 +517,15 @@ DECLARE
   v_payload JSONB;
   v_chatwoot_payload JSONB;
 BEGIN
-  -- Não dispara para notas internas restritas
-  IF (NEW.is_internal_note = FALSE) THEN
+  -- Não dispara para notas internas restritas nem para mensagens importadas (evita loop no WhatsApp)
+  IF (NEW.is_internal_note = FALSE AND COALESCE(NEW.is_imported, FALSE) = FALSE) THEN
     -- 1. Se o canal for WhatsApp, dispara a Edge Function dedicada do Chatwoot (Motor Oficial de Templates)
     IF (NEW.channel = 'whatsapp') THEN
       v_chatwoot_payload := jsonb_build_object(
         'message_id', NEW.id,
         'ticket_id', NEW.ticket_id,
         'company_id', NEW.company_id,
+        'is_imported', COALESCE(NEW.is_imported, FALSE),
         'template_name', NEW.whatsapp_template_name,
         'variables', NEW.whatsapp_template_variables,
         'content', NEW.content
