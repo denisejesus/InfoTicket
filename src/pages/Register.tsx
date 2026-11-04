@@ -1,3 +1,6 @@
+/**
+ * TicketFlow - Onboarding e Cadastro de Empresa v1.1.0
+ */
 import React, { useState, useRef } from 'react';
 import { 
   Building2, 
@@ -12,7 +15,6 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2, 
-  Headphones, 
   ShieldCheck,
   Eye,
   EyeOff
@@ -264,10 +266,12 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess, onNavigateLogin }
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased">
       {/* Top Header Branding */}
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center mb-8">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20 mb-3">
-          <Headphones className="w-6 h-6" />
-        </div>
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <img
+          src={`${import.meta.env.BASE_URL}logoTicetflow.jpeg`}
+          alt="TicketFlow"
+          className="h-14 sm:h-16 w-auto mx-auto mb-3 object-contain"
+        />
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           Crie sua conta no TicketFlow
         </h1>
         <p className="mt-2 text-sm text-slate-600">

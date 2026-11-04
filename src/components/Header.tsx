@@ -1,7 +1,7 @@
 /**
- * InfoTicket - Cabeçalho Global & Central de Notificações Reais v1.6.0
+ * InfoTicket - Cabeçalho Global & Central de Notificações Reais v1.8.0
  * Consome eventos dinâmicos reais do Supabase (audit_logs, tickets, profiles) com suporte a Realtime e marcação de leitura
- * 100% Responsivo com botão hambúrguer para controle da gaveta lateral (Sidebar) em smartphones e tablets
+ * 100% Responsivo com botão hambúrguer e logomarca oficial TicketFlow compatível com base path (/ticketflow/)
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
@@ -214,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200 gap-2">
-      {/* Esquerda: Botão Hambúrguer (Mobile/Tablet) e Busca */}
+      {/* Esquerda: Botão Hambúrguer (Mobile/Tablet), Logomarca Global e Busca */}
       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
         <button
           type="button"
@@ -225,6 +225,12 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
+
+        <img
+          src={`${import.meta.env.BASE_URL}logoTicetflow.jpeg`}
+          alt="TicketFlow"
+          className="h-8 sm:h-10 w-auto object-contain shrink-0"
+        />
 
         <div className="relative flex-1 max-w-xs sm:max-w-sm lg:max-w-md hidden sm:block">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">

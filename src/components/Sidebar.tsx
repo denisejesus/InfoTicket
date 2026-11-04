@@ -1,5 +1,5 @@
 /**
- * TicketFlow - Barra Lateral Responsiva (Off-Canvas Mobile/Tablet) v1.12.0
+ * TicketFlow - Barra Lateral Responsiva (Off-Canvas Mobile/Tablet) v1.14.0
  */
 import React from 'react';
 import { 
@@ -87,19 +87,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Header do Logo + Botão Fechar Mobile */}
         <div className="flex items-center justify-between gap-2 px-4 sm:px-6 h-16 border-b border-slate-200 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white font-bold text-sm shadow-sm shrink-0">
-              TF
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-bold text-slate-900 tracking-tight truncate">TicketFlow</span>
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded shrink-0">
-                  Corporativo
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-medium truncate">Plataforma de Atendimento</p>
-            </div>
+          <div className="flex-1 flex items-center justify-center min-w-0">
+            <img
+              src={`${import.meta.env.BASE_URL}logoTicetflow.jpeg`}
+              alt="TicketFlow"
+              className="h-8 w-auto mx-auto object-contain"
+            />
           </div>
 
           {onCloseMobile && (
@@ -199,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               TicketFlow Core
             </span>
             <span className="px-1.5 py-0.2 bg-slate-200 font-mono text-[10px] text-slate-700 rounded font-semibold">
-              v1.12.0
+              v1.14.0
             </span>
           </div>
         </div>

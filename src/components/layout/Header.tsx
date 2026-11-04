@@ -1,3 +1,6 @@
+/**
+ * TicketFlow - Header de Layout Base v1.2.0
+ */
 import React, { useState } from 'react';
 import { 
   Bell, 
@@ -63,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 sm:px-6 bg-white border-b border-slate-200">
-      {/* Botão de Toggle Mobile e Busca */}
+      {/* Botão de Toggle Mobile, Logomarca e Busca */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
@@ -72,6 +75,12 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Menu className="w-5 h-5" />
         </button>
+
+        <img
+          src={`${import.meta.env.BASE_URL}logoTicetflow.jpeg`}
+          alt="TicketFlow"
+          className="h-8 sm:h-10 w-auto object-contain shrink-0"
+        />
 
         {/* Campo de Busca Rápida */}
         <div className="relative hidden md:block w-72 lg:w-96">
