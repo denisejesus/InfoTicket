@@ -3,13 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.10.0";
 
 /**
- * InfoTicket - Send Notification Edge Function v1.19.0
+ * InfoTicket - Send Notification Edge Function v1.20.0
  * Motor assíncrono para interpolação de templates e disparo de notificações por E-mail Multi-Tenant
  * Interpola credenciais de acesso temporárias reais ({{senha_temporaria}}) no template welcome_email
  * Consulta credenciais SMTP corporativas da tabela `companies` com base no `company_id`
  * Renderiza templates HTML profissionais mapeados da tabela `communication_templates`
  * Suporte a envio oficial direto via SMTP (Host, Porta, Usuário, Senha, From Email, From Name)
  * Configuração dinâmica de TLS/SSL (Porta 465 SSL, Porta 587/outras com requireTLS)
+ * Proteção Anti-Loop: ignora silenciosamente mensagens importadas do histórico (is_imported = true)
  * Isolamento de falhas de envio: erros de SMTP não travam o fluxo do usuário (HTTP 200)
  * Auditoria com registro de falhas e sucessos em `audit_logs`
  */
@@ -40,6 +41,8 @@ interface NotificationPayload {
   recipient_name?: string;
   temp_password?: string;
   message_id?: string;
+  is_imported?: boolean;
+  app_url?: string;
   custom_data?: Record<string, string>;
 }
 
@@ -133,6 +136,19 @@ serve(async (req: Request) => {
       event_type === "nova_mensagem" ? "new_message" :
       event_type
     );
+
+    // Bloqueio silencioso imediato caso a mensagem seja parte de histórico importado (is_imported === true)
+    if (normalizedEventType === "new_message" && payload.is_imported === true) {
+      console.log("ℹ️ [Send Notification] Mensagem marcada como is_imported=true. Abortando silenciosamente disparo de e-mail de Nova Interação.");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          message: "Disparo de e-mail ignorado para mensagem importada do histórico.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     let recipientEmails: string[] = [];
     let finalAssunto = "";
@@ -392,11 +408,22 @@ serve(async (req: Request) => {
       if (payload.message_id) {
         const { data: msg } = await supabase
           .from("ticket_messages")
-          .select("content, user_id, user:profiles(id, nome)")
+          .select("content, user_id, is_imported, is_internal_note, user:profiles(id, nome)")
           .eq("id", payload.message_id)
           .maybeSingle();
 
         if (msg) {
+          if (normalizedEventType === "new_message" && (msg.is_imported === true || msg.is_internal_note === true)) {
+            console.log(`ℹ️ [Send Notification] Mensagem #${payload.message_id} é importada (is_imported=${msg.is_imported}) ou nota interna. Abortando silenciosamente o disparo de e-mail.`);
+            return new Response(
+              JSON.stringify({
+                success: true,
+                skipped: true,
+                message: "Disparo de e-mail abortado silenciosamente para mensagem importada ou nota interna.",
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
           mensagemResumo = msg.content;
           remetenteId = msg.user_id;
           nomeRemetente = (msg.user as any)?.nome || nomeRemetente;

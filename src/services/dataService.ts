@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Company, Profile, Ticket, CommunicationTemplate, TicketAttachment, ChatwootChannel, AppNotification } from '../types/database';
 
 /**
- * Serviço de dados do TicketFlow v1.29.0
+ * Serviço de dados do TicketFlow v1.30.0
  * Consome exclusivamente o Supabase sem mocks hardcoded
  */
 export const dataService = {
@@ -1782,6 +1782,7 @@ export const dataService = {
           .from('tickets')
           .select('id, cliente_id, chatwoot_conversation_id, assunto, status, criado_em')
           .eq('company_id', params.company_id)
+          .in('status', ['Aberto', 'Em Atendimento', 'Em Andamento', 'Aguardando Cliente'])
           .order('criado_em', { ascending: false }),
         supabase
           .from('profiles')
@@ -1907,6 +1908,7 @@ export const dataService = {
           status: conv?.status || 'open',
           existing_ticket_id: existing?.id || null,
           existing_ticket_subject: existing?.assunto || null,
+          existing_ticket_status: (existing as any)?.status || null,
           recent_messages: recentMessages,
         };
       });

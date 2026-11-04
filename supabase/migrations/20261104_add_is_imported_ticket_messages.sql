@@ -45,7 +45,8 @@ BEGIN
       'company_id', NEW.company_id,
       'event_type', 'new_message',
       'message_id', NEW.id,
-      'user_id', NEW.user_id
+      'user_id', NEW.user_id,
+      'is_imported', COALESCE(NEW.is_imported, FALSE)
     );
 
     BEGIN

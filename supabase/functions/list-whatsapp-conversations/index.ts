@@ -2,10 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * TicketFlow - List WhatsApp Conversations Edge Function v1.1.0
+ * TicketFlow - List WhatsApp Conversations Edge Function v1.2.0
  * Lista as conversas abertas de um Canal de WhatsApp (inbox_id) da empresa ativa
  * GET /api/v1/accounts/{account_id}/conversations?inbox_id={inbox_id}&status=open
- * Identifica chamados anteriores cruzando estritamente pelo telefone (whatsapp) e chatwoot_conversation_id
+ * Identifica apenas chamados ATIVOS ('Aberto', 'Em Atendimento', 'Em Andamento', 'Aguardando Cliente'),
+ * ignorando chamados já concluídos ou fechados.
  */
 
 const corsHeaders = {
@@ -170,12 +171,13 @@ serve(async (req: Request) => {
       ? cwJson
       : [];
 
-    // 3. Verifica quais conversas ou números de WhatsApp já possuem chamado anterior nesta empresa (aberto ou concluído)
+    // 3. Verifica quais conversas ou números de WhatsApp possuem chamado ATIVO nesta empresa (ignora Fechado/Resolvido/Concluído)
     const [{ data: existingTickets }, { data: companyProfiles }] = await Promise.all([
       supabase
         .from("tickets")
         .select("id, cliente_id, chatwoot_conversation_id, assunto, status, criado_em")
         .eq("company_id", company_id)
+        .in("status", ["Aberto", "Em Atendimento", "Em Andamento", "Aguardando Cliente"])
         .order("criado_em", { ascending: false }),
       supabase
         .from("profiles")

@@ -1,10 +1,10 @@
 /**
- * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.4.0
+ * TicketFlow - Modal de Importação de Conversas do WhatsApp v1.5.0
  * Permite puxar conversas ativas do WhatsApp (Canais da empresa) e transformá-las em chamados no sistema.
  * Inclui Área de Leitura Rápida (Preview das últimas 3 a 5 interações) para validar o contexto antes de Gerar Chamado.
  * Cálculo dinâmico de SLA (sla_vencimento) baseado no sla_padrao_horas configurado pela empresa ativa.
- * Regra de Negócio: A ligação de identidade ocorre pelo número de WhatsApp; mesmo quando já existe
- * chamado anterior (exibindo o aviso azul), o botão "Abrir Chamado" SEMPRE força a criação de um novo chamado.
+ * Regra de Negócio: Verifica apenas chamados ATIVOS ('Aberto', 'Em Atendimento', 'Em Andamento', 'Aguardando Cliente'),
+ * omitindo avisos caso os chamados anteriores do cliente já estejam encerrados/resolvidos.
  * Layout 100% Responsivo no Smartphone com Rolagem Interna e Botões Fixos Acessíveis.
  * Regras absolutas: Tema Claro (Light Mode), Isolamento Multi-Tenant (company_id) e zero jargões técnicos na interface.
  */
@@ -54,6 +54,7 @@ interface WhatsappConversationItem {
   status: string;
   existing_ticket_id: string | null;
   existing_ticket_subject: string | null;
+  existing_ticket_status?: string | null;
   recent_messages?: PreviewMessageItem[];
 }
 
@@ -569,12 +570,16 @@ export const ImportWhatsappModal: React.FC<ImportWhatsappModalProps> = ({
                                 Última interação: {formattedDate}
                               </span>
                             )}
-                            {conv.existing_ticket_id && (
-                              <span className="inline-flex items-center gap-1 text-blue-600 font-semibold">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Já possui chamado (#{conv.existing_ticket_id.substring(0, 8)})
-                              </span>
-                            )}
+                            {conv.existing_ticket_id &&
+                              (!conv.existing_ticket_status ||
+                                ['Aberto', 'Em Atendimento', 'Em Andamento', 'Aguardando Cliente'].includes(
+                                  conv.existing_ticket_status
+                                )) && (
+                                <span className="inline-flex items-center gap-1 text-blue-600 font-semibold">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Já possui chamado (#{conv.existing_ticket_id.substring(0, 8)})
+                                </span>
+                              )}
                           </div>
                         </div>
 
